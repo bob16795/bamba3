@@ -1,0 +1,604 @@
+def std: import "std/std.bam";
+def sdl: import "libs/sdl.bam";
+def ecs: import "libs/ecs.bam";
+
+def WINDOW_NAME: "GAME";
+
+def SCALE: 3;
+
+def WINDOW_DIMS_X: f64(160 * SCALE);
+def WINDOW_DIMS_Y: f64(144 * SCALE);
+
+def TILE_SIZE: f64(8 * SCALE);
+def MAP_SIZE_X: 10;
+def MAP_SIZE_Y: 10;
+def MAP_OFFSET_X: 0;
+def MAP_OFFSET_Y: (144 / 2);
+
+def PLAYER_ANIM_BACK: 0;
+def PLAYER_ANIM_FRONT: 1;
+def PLAYER_ANIM_LEFT: 2;
+def PLAYER_ANIM_RIGHT: 3;
+
+def Vec2: class {
+    def x: prop f64;
+    def y: prop f64;
+};
+
+def RigidBody: class {
+    def vel: prop Vec2;
+    def acc: prop Vec2;
+
+    def init: fn[self: *Self] -> *Self {
+        self.vel = ${f64(0.0), f64(0.0)};
+        self.acc = ${f64(0.0), f64(0.0)};
+        
+        return self;
+    };
+};
+
+def Transform: class {
+    def pos: prop Vec2;
+    def scale: prop Vec2;
+    def rot: prop f64;
+
+    def init: fn[self: *Self] -> *Self {
+        self.pos = ${f64(0.0), f64(0.0)};
+        self.scale = ${f64(100.0), f64(100.0)};
+        self.rot = f64(0.0);
+
+        return self;
+    };
+};
+
+def Drawable: std.Types.Interface(
+    ${
+        ${"draw", Void}
+    }, class {
+        def transform: prop *Transform;
+        def dt: prop f64;
+
+        def init: fn[] -> Self {
+            def result: new Self;
+
+            return *result;
+        };
+    },
+);
+
+def Sprite: class {
+    def tex: prop sdl.Texture;
+    def size: prop Vec2;
+
+    def animations: prop i32;
+    def animation: prop i32;
+    def frames: prop i32;
+    def counter: prop f64;
+    def time: prop f64;
+
+    def init: fn[image: *(u8[])] -> Self {
+        def result: new Self;
+
+        def surface: sdl.Surface.create(image);
+        result.tex = sdl.Texture.create(renderer, surface);
+        result.frames = i32(2);
+        result.animations = i32(2);
+        result.animation = i32(0);
+        result.counter = f64(0);
+        result.time = f64(0.2);
+        result.size = ${f64(16), f64(16)};
+
+        return *result;
+    };
+
+    def draw: fn[self: *Self, data: *Drawable.Data] -> Void {
+        def dst_rect: new sdl.Rect;
+        dst_rect.x = i32(*(*data.transform).pos.x) * i32(SCALE);
+        dst_rect.y = i32(*(*data.transform).pos.y) * i32(SCALE);
+        dst_rect.w = i32(*(*data.transform).scale.x);
+        dst_rect.h = i32(*(*data.transform).scale.y);
+ 
+        self.counter = *self.counter + *data.dt;
+ 
+        def frame_width: *self.size.x;
+        def frame_height: *self.size.y;
+        def frame: f64(i32(*self.counter * *self.time) % *self.frames);
+ 
+        def src_rect: new sdl.Rect;
+        src_rect.x = i32(frame_width * frame);
+        src_rect.y = i32(frame_height * f64(*self.animation));
+        src_rect.w = i32(frame_width);
+        src_rect.h = i32(frame_height);
+ 
+        renderer.copy(*self.tex, src_rect, dst_rect);
+
+        return;
+    };
+};
+
+def Player: class {
+    def input: prop Vec2;
+    def speed: prop f64;
+
+    def init: fn[self: *Self] -> *Self {
+        self.input = ${f64(0.0), f64(0.0)};
+        self.speed = f64(0.1);
+        
+        return self;
+    };
+};
+
+def RectCollider: class {
+    def offset: prop Vec2;
+    def size: prop Vec2;
+
+    def colliding: prop Bool;
+
+    def init: fn[self: *Self] -> *Self {
+        self.offset = ${f64(0.0), f64(0.0)};
+        self.size = ${TILE_SIZE, TILE_SIZE};
+        
+        return self;
+    };
+};
+
+def Tile: class {
+    def x: prop i32;
+    def y: prop i32;
+};
+
+def Map: class {
+    def tex: prop sdl.Texture;
+    def tiles: prop Tile[MAP_SIZE_X][MAP_SIZE_Y];
+    def tile_size: prop Vec2;
+
+    def init: fn[self: *Self, image: *(u8[])] -> *Self {
+        def surface: sdl.Surface.create(image);
+        self.tex = sdl.Texture.create(renderer, surface);
+        self.tile_size = ${f64(16), f64(16)};
+
+        def y: new usize = usize(0);
+
+        while (*y < usize(MAP_SIZE_Y)) {
+            def x: new usize = usize(MAP_SIZE_X);        
+
+            while (*x > usize(0)) {
+                x = *x - usize(1);
+
+                self.tiles[*x][*y] = ${i32(*x % usize(2)), i32(*y % usize(2))};
+            }
+
+            y = *y + usize(1);
+        }
+
+        return self;
+    };
+
+    def draw: fn[self: *Self, data: *Drawable.Data] -> Void {
+        def y: new usize = usize(0);
+
+        while (*y < usize(MAP_SIZE_Y)) {
+            def x: new usize = usize(MAP_SIZE_X);        
+
+            while (*x > usize(0)) {
+                x = *x - usize(1);
+
+                def tile: self.tiles[*x][*y];
+
+                def rect: new sdl.Rect;
+                rect.x = (i32(f64(*x) * f64(8 * SCALE)) + i32(*y * usize(8 * SCALE))) + i32(MAP_OFFSET_X * SCALE);
+                rect.y = (i32(f64(*y) * f64(4 * SCALE)) - i32(*x * usize(4 * SCALE))) + i32(MAP_OFFSET_Y * SCALE);
+                rect.w = i32(16 * SCALE);
+                rect.h = i32(16 * SCALE);
+
+                def src_rect: new sdl.Rect;
+                src_rect.x = i32(f64(*tile.x) * *self.tile_size.x);
+                src_rect.y = i32(f64(*tile.y) * *self.tile_size.y);
+                src_rect.w = i32(*self.tile_size.x);
+                src_rect.h = i32(*self.tile_size.y);
+
+                renderer.copy(*self.tex, src_rect, rect);
+            }
+
+            y = *y + usize(1);
+        }
+
+        return;
+    };
+};
+
+def PhysicsSystem: class {
+    def base: prop ecs.System;
+
+    def update: fn[self: *Self, dt: f64] -> Void {
+        def i: new usize = usize(0);        
+
+        while (*i < *self.base.entities.items.len) {
+            def entity: self.base.entities[*i];
+
+            def rigidbody: (*RigidBody)(coordinator.getComponent(RigidBody, *entity));
+            def transform: (*Transform)(coordinator.getComponent(Transform, *entity));
+
+            transform.pos.x = *transform.pos.x + dt * *rigidbody.vel.x;
+            transform.pos.y = *transform.pos.y + dt * *rigidbody.vel.y;
+
+            rigidbody.vel.x = *rigidbody.vel.x + dt * *rigidbody.acc.x;
+            rigidbody.vel.y = *rigidbody.vel.y + dt * *rigidbody.acc.y;
+
+            i = *i + usize(1);
+        }
+
+        return;
+    };
+};
+
+def PlayerSystem: class {
+    def base: prop ecs.System;
+
+    def keyEvent: fn[self: *Self, key: i32, down: Bool] -> Void {
+        def i: new usize = usize(0);        
+
+        while (*i < *self.base.entities.items.len) {
+            def entity: self.base.entities[*i];
+
+            def rigidbody: (*RigidBody)(coordinator.getComponent(RigidBody, *entity));
+            def player: (*Player)(coordinator.getComponent(Player, *entity));
+            def sprite: (*Drawable)(coordinator.getComponent(Drawable, *entity));
+
+            def adds: new Vec2;
+            adds.x = f64(0);
+            adds.y = f64(0);
+
+            if (key == i32('a')) {
+                adds.x = f64(0.0 - 1.0);
+            }
+            if (key == i32('d')) {
+                adds.x = *adds.x + f64(1.0);
+            }
+
+            if (key == i32('w')) {
+                adds.y = f64(0.0 - 1.0);
+            }
+            if (key == i32('s')) {
+                adds.y = *adds.y + f64(1.0);
+            }
+            
+            if (!down) {
+                adds.x = *adds.x * f64(0.0 - 1.0);
+                adds.y = *adds.y * f64(0.0 - 1.0);
+            }
+
+            player.input.x = *player.input.x + *adds.x * *player.speed;
+            player.input.y = *player.input.y + *adds.y * *player.speed;
+
+            if (*player.input.y > f64(0)) {
+                ((*Sprite)(*sprite.self)).animation = i32(PLAYER_ANIM_FRONT);
+            } else if (*player.input.y < f64(0)) {
+                ((*Sprite)(*sprite.self)).animation = i32(PLAYER_ANIM_BACK);
+            } else if (*player.input.x > f64(0)) {
+                ((*Sprite)(*sprite.self)).animation = i32(PLAYER_ANIM_RIGHT);
+            } else if (*player.input.x < f64(0)) {
+                ((*Sprite)(*sprite.self)).animation = i32(PLAYER_ANIM_LEFT);
+            }
+
+
+            def anim: i32(0);
+
+            i = *i + usize(1);
+        }
+
+        return;
+    };
+
+    def update: fn[self: *Self, dt: f64] -> Void {
+        def i: new usize = usize(0);        
+
+        while (*i < *self.base.entities.items.len) {
+            def entity: self.base.entities[*i];
+
+            def rigidbody: (*RigidBody)(coordinator.getComponent(RigidBody, *entity));
+            def player: (*Player)(coordinator.getComponent(Player, *entity));
+
+            rigidbody.vel.x = *player.input.x + *rigidbody.vel.x;
+            rigidbody.vel.y = *player.input.y + *rigidbody.vel.y;
+
+            rigidbody.vel.x = *rigidbody.vel.x * f64(0.99);
+            rigidbody.vel.y = *rigidbody.vel.y * f64(0.99);
+
+            i = *i + usize(1);
+        }
+
+        return;
+    };
+};
+
+def DrawSystem: class {
+    def base: prop ecs.System;
+
+    def draw: fn[self: *Self, dt: f64] -> Void {
+        def i: new usize = usize(0);        
+
+        while (*i < *self.base.entities.items.len) {
+            def entity: self.base.entities[*i];
+
+            def transform: (*Transform)(coordinator.getComponent(Transform, *entity));
+            def sprite: (*Drawable)(coordinator.getComponent(Drawable, *entity));
+
+            sprite.data.transform = transform;
+            sprite.data.dt = dt;
+
+            sprite.draw();
+
+            i = *i + usize(1);
+        }
+
+        return;
+    };
+};
+
+def CollisionSystem: class {
+    def base: prop ecs.System;
+
+    def collide: fn[self: *Self] -> Void {
+        def i: new usize = usize(0);        
+
+        while (*i < *self.base.entities.items.len) {
+            def entity: self.base.entities[*i];
+
+            def arect: (*RectCollider)(coordinator.getComponent(RectCollider, *entity));
+
+            arect.colliding = Bool(false);
+
+            i = *i + usize(1);
+        }
+
+        i = usize(0);
+            
+        while (*i < *self.base.entities.items.len) {
+            def entity: self.base.entities[*i];
+
+            def atransform: (*Transform)(coordinator.getComponent(Transform, *entity));
+            def arigidbody: (*RigidBody)(coordinator.getComponent(RigidBody, *entity));
+            def arect: (*RectCollider)(coordinator.getComponent(RectCollider, *entity));
+
+            def ax1: *atransform.pos.x + *arect.offset.x;
+            def ax2: *atransform.pos.x + *arect.offset.x + *arect.size.x;
+            def ay1: *atransform.pos.y + *arect.offset.y;
+            def ay2: *atransform.pos.y + *arect.offset.y + *arect.size.y;
+
+            def ax: f64(ax1 / f64(SCALE)) - f64(MAP_OFFSET_X);
+            def ay: f64(ay1 / f64(SCALE)) - f64(MAP_OFFSET_Y);
+
+            def isox: (ax / f64(16)) + (ay / f64(8));
+            def isoy: f64(0) - ((ay / f64(8)) - (ax / f64(16)));
+
+            if (isox < f64(0)) {
+                arect.colliding = Bool(true);
+            }
+            if (isox > f64(MAP_SIZE_X)) {
+                arect.colliding = Bool(true);
+            }
+            if (isoy < f64(0)) {
+                arect.colliding = Bool(true);
+            }
+            if (isoy > f64(MAP_SIZE_Y)) {
+                arect.colliding = Bool(true);
+            }
+
+            def j: new usize = *i + usize(1);        
+            while (*j < *self.base.entities.items.len) {
+                def other: self.base.entities[*j];
+
+                def btransform: (*Transform)(coordinator.getComponent(Transform, *other));
+                def brigidbody: (*RigidBody)(coordinator.getComponent(RigidBody, *other));
+                def brect: (*RectCollider)(coordinator.getComponent(RectCollider, *other));
+
+                def bx1: *btransform.pos.x + *brect.offset.x;
+                def bx2: *btransform.pos.x + *brect.offset.x + *brect.size.x;
+                def by1: *btransform.pos.y + *brect.offset.y;
+                def by2: *btransform.pos.y + *brect.offset.y + *brect.size.y;
+
+                if ((ax1 < bx2) & (ax2 > bx1) & (ay1 < by2) & (ay2 > by1)) {
+                    brect.colliding = Bool(true);
+                    arect.colliding = Bool(true);
+                }
+ 
+                j = *j + usize(1);
+            }
+
+            i = *i + usize(1);
+        }
+
+        return;
+    };
+    
+    def draw: fn[self: *Self] -> Void {
+        def i: new usize = usize(0);        
+            
+        while (*i < *self.base.entities.items.len) {
+            def entity: self.base.entities[*i];
+
+            def transform: (*Transform)(coordinator.getComponent(Transform, *entity));
+            def rect: (*RectCollider)(coordinator.getComponent(RectCollider, *entity));
+
+            def newRect: new sdl.Rect;
+            newRect.x = i32((*transform.pos.x + *rect.offset.x) / f64(SCALE)) * i32(SCALE);
+            newRect.y = i32((*transform.pos.y + *rect.offset.y) / f64(SCALE)) * i32(SCALE);
+            newRect.w = i32(*rect.size.x);
+            newRect.h = i32(*rect.size.y);
+
+            renderer.drawColor(u8(0), u8(0), u8(255), u8(255));
+
+            if (*rect.colliding) {
+                renderer.drawColor(u8(255), u8(0), u8(0), u8(255));
+            }
+
+            renderer.drawRect(newRect);
+
+            i = *i + usize(1);
+        }
+
+        return;
+    };
+};
+
+
+// externs
+def printf: extern fn[] -> Void;
+def malloc: extern fn[] -> *Void;
+
+// globals
+def coordinator: new ecs.Coordinator;
+
+def setupSigs: fn[] -> Void {
+    def sig: new ecs.Signature;
+    def j: new usize = usize(0);
+    while (*j < usize(ecs.MAX_COMPONENTS)) {
+        sig[*j] = Bool(false);
+
+        j = *j + usize(1);
+    }
+    
+    sig[usize(Transform.COMPONENT_ID)] = Bool(true);
+    sig[usize(RigidBody.COMPONENT_ID)] = Bool(true);
+    sig[usize(Drawable.COMPONENT_ID)] = Bool(false);
+    sig[usize(Player.COMPONENT_ID)] = Bool(false);
+    sig[usize(RectCollider.COMPONENT_ID)] = Bool(false);
+    
+    coordinator.setSystemSignature(PhysicsSystem, *sig);
+
+    sig[usize(Transform.COMPONENT_ID)] = Bool(true);
+    sig[usize(RigidBody.COMPONENT_ID)] = Bool(false);
+    sig[usize(Drawable.COMPONENT_ID)] = Bool(true);
+    sig[usize(Player.COMPONENT_ID)] = Bool(false);
+    sig[usize(RectCollider.COMPONENT_ID)] = Bool(false);
+
+    coordinator.setSystemSignature(DrawSystem, *sig);
+    
+    sig[usize(Transform.COMPONENT_ID)] = Bool(false);
+    sig[usize(RigidBody.COMPONENT_ID)] = Bool(true);
+    sig[usize(Drawable.COMPONENT_ID)] = Bool(true);
+    sig[usize(Player.COMPONENT_ID)] = Bool(true);
+    sig[usize(RectCollider.COMPONENT_ID)] = Bool(false);
+
+    coordinator.setSystemSignature(PlayerSystem, *sig);
+    
+    sig[usize(Transform.COMPONENT_ID)] = Bool(true);
+    sig[usize(RigidBody.COMPONENT_ID)] = Bool(true);
+    sig[usize(Drawable.COMPONENT_ID)] = Bool(false);
+    sig[usize(Player.COMPONENT_ID)] = Bool(false);
+    sig[usize(RectCollider.COMPONENT_ID)] = Bool(true);
+
+    coordinator.setSystemSignature(CollisionSystem, *sig);
+    
+    return;
+};
+
+def renderer: new sdl.Renderer;
+
+// main fn
+force def main: fn[] -> i32 {
+    if (sdl.init(u32(sdl.InitFlags.EVERYTHING)) != u32(0)) {
+        printf("FAILED\n");
+
+        return i32(0);
+    }
+    
+    def window: sdl.Window.create(WINDOW_NAME, i32(WINDOW_DIMS_X), i32(WINDOW_DIMS_Y), u32(0));
+    renderer.create(window, i32(0) - i32(1), i32(2));
+
+    coordinator.init();
+
+    coordinator.registerComponent(Player);
+    coordinator.registerComponent(Drawable);
+    coordinator.registerComponent(RigidBody);
+    coordinator.registerComponent(Transform);
+    coordinator.registerComponent(RectCollider);
+
+    def drawSystem: (*DrawSystem)(coordinator.registerSystem(DrawSystem));
+    def physicsSystem: (*PhysicsSystem)(coordinator.registerSystem(PhysicsSystem));
+    def playerSystem: (*PlayerSystem)(coordinator.registerSystem(PlayerSystem));
+    def collisionSystem: (*CollisionSystem)(coordinator.registerSystem(CollisionSystem));
+
+    setupSigs();
+
+    def e: new ecs.Entity;
+
+    e = coordinator.createEntity();
+
+    def map: (new Map).init("floor.png");
+    def mapDrw: new Drawable = Drawable.init(Map, map);
+    
+    def trans: (new Transform).init();
+    trans.pos.x = f64(0);
+    trans.pos.y = f64(0);
+    trans.scale.x = f64(1);
+    trans.scale.y = f64(1);
+
+    coordinator.addComponent(Transform, *e, trans);
+    coordinator.addComponent(Drawable, *e, mapDrw);
+
+    def trans: (new Transform).init();
+    trans.pos.x = f64(0);
+    trans.pos.y = f64(0);
+    trans.scale.x = TILE_SIZE * f64(2.0);
+    trans.scale.y = TILE_SIZE * f64(2.0);
+
+    def rectColl: (new RectCollider).init();
+    rectColl.offset.x = f64(3 * SCALE);
+    rectColl.offset.y = f64(10 * SCALE);
+    rectColl.size.x = f64(10 * SCALE);
+    rectColl.size.y = f64(4 * SCALE);
+
+    e = coordinator.createEntity();
+    coordinator.addComponent(Transform, *e, trans);
+    coordinator.addComponent(Player, *e, (new Player).init());
+    coordinator.addComponent(RigidBody, *e, (new RigidBody).init());
+    coordinator.addComponent(RectCollider, *e, rectColl);
+    
+    def spr: new Sprite = Sprite.init("player.png");
+    
+    def plyDrw: new Drawable = Drawable.init(Sprite, spr);
+
+    coordinator.addComponent(Drawable, *e, plyDrw);
+
+    def close: new Bool = Bool(false);
+    def event: new sdl.Event;
+
+    while (!*close) {
+        while (event.poll()) {
+            if (*event.base.type == u32(256)) {
+                close = Bool(true);
+            } else if (*event.base.type == u32(768)) {
+                def keycode: *(*sdl.Event.KeyEvent)(event).keysym.keycode;
+
+                // skip key repeat events
+                if (*(*sdl.Event.KeyEvent)(event).repeat == u8(0)) {
+                   playerSystem.keyEvent(keycode, Bool(true));
+                }
+            } else if (*event.base.type == u32(769)) {
+                def keycode: *(*sdl.Event.KeyEvent)(event).keysym.keycode;
+    
+                playerSystem.keyEvent(keycode, Bool(false));
+            }
+        }
+
+        def dt: sdl.getDT();
+
+        playerSystem.update(f64(dt));
+        physicsSystem.update(f64(dt));
+
+        collisionSystem.collide();
+
+        renderer.drawColor(u8(55), u8(54), u8(74), u8(255));
+        renderer.clear();
+
+        drawSystem.draw(dt);
+        //collisionSystem.draw();
+
+        renderer.present();
+    }
+
+    return i32(0);
+};
+

@@ -1,0 +1,23 @@
+force def add_def: fn[] -> Void {
+    def printf: extern fn[] -> Void;
+
+    def Poop: comptime {
+        return class {
+            def inches: prop f64;
+
+            def PI: 3.14;
+        };
+    };
+
+    def turd: new Poop;
+
+    turd.inches = f64(10);
+
+    @ADD_DEF(Poop, "radius", prop f64);
+
+    turd.radius = f64(0.5);
+
+    printf("turd volume: %f\n", f64(Poop.PI) * *turd.radius * *turd.radius * *turd.inches);
+
+    return;
+};

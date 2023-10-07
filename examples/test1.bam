@@ -1,0 +1,144 @@
+def std: import "std/std.bam";
+
+def printf: extern fn[] -> Void;
+
+def Drivable: class {
+    def self: prop *Void;
+    def VTable: prop class {
+        def driveDistanceImpl: prop *fn[a: *Void] -> i32;
+    };
+
+    def pos: prop i32;
+
+    def drive: fn[self: *Self] -> i32 {
+        def distance: (*self.VTable.driveDistanceImpl)(self.self);
+    
+        self.pos = *self.pos + distance;
+   
+        return distance;
+    };
+
+    def setPos: fn[self: *Self, pos: i32] -> Void {
+        self.pos = pos;
+        
+        return;
+    };
+
+    def init: fn[T: Type, car: *Void] -> Self {
+        def result: new Self;
+
+        result.self = car;
+        result.pos = i32(0);
+
+        result.VTable.driveDistanceImpl = T.driveDistance;
+
+        return *result;
+    };
+};
+
+def Car: class {
+    def driveDistance: fn[self: *Self] -> i32 {
+        return i32(100);
+    };
+};
+
+def MotorCycle: class {
+    def driveDistance: fn[self: *Self] -> i32 {
+        return i32(10);
+    };
+};
+    
+def drivablesType: std.Types.ArrayList(Drivable);
+    
+def ClosureTest: std.Types.Closure(
+    class {
+        def a: prop *i32;
+    },
+    class {
+        def b: prop i32;
+    },
+    i32,
+    fn[a: *class { def a: prop *i32; }, b: *class { def b: prop i32; }] -> i32 {
+        a.a = b.b; 
+        printf("set a to %d\n", *a.a);
+
+        return *a.a;
+    }
+);
+
+def getMain: fn[Start] -> (fn[] -> i32) {
+    if (Start < 10 + 1) {
+        return fn[] -> i32 {
+            // create a value to set
+            def a: new i32;
+
+            // create a setter
+            def closureInstance: new ClosureTest;
+            
+            // set the initial value
+            def initVal: new ClosureTest.I = ${*a};
+            closureInstance = ClosureTest.init(*initVal);
+
+            // create a runner value
+            def runVal: new ClosureTest.P;
+
+            // run the test with 10
+            runVal = ${i32(10)};
+            ClosureTest.run(closureInstance, *runVal);
+
+            // run the test with 20
+            runVal = ${i32(20)};
+            ClosureTest.run(closureInstance, *runVal);
+
+            // misc stuff
+            def drivables: new drivablesType;
+            drivables.init();
+
+            def car: new Car;
+            def motorcycle: new MotorCycle;
+
+            def tmp: new comptime {
+                return class {
+                    def message: "Hello World!\n"; 
+                    def tmp: prop i32;
+
+                    def hw: fn[self: *Self] -> Void {
+                        printf(message);
+
+                        self.tmp = i32(1);
+
+                        return;
+                    };
+                };
+            };
+
+            (*tmp).TYPE.hw(tmp);
+            tmp.hw();
+
+            printf("%d\n", *tmp.tmp);
+
+            drivables.append(Drivable.init(MotorCycle, motorcycle));
+            drivables.append(Drivable.init(Car, car));
+
+            printf("total: %d\n", *drivables.items.len);
+
+            def carDrivable: drivables[usize(0)];
+            Drivable.setPos(carDrivable, i32(0));
+            printf("start: %d\n", *carDrivable.pos);
+            
+            def idx: new i32 = i32(0);
+
+            while (*idx < i32(Start)) {
+                Drivable.drive(carDrivable);
+
+                idx = *idx + i32(1);
+            }
+            
+            printf("end: %d\n", *carDrivable.pos);
+
+            return i32(0);
+        };
+    } else ERROR("Expected Value < 10");
+};
+
+force def main: getMain(10);

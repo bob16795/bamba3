@@ -1,0 +1,11 @@
+[package]
+name = "bamba3"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+llvm-sys = { version = "160", features = ["prefer-dynamic"] }
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"] }
+clap = { version = "4.4.6", features = ["derive"] }
