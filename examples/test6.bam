@@ -8,10 +8,9 @@ force def main: fn[] -> i32 {
 
     String.println(s);
 
-    while (Bool(true)) {
-        break;
+    if (class {def a: i32; def b: 100;}.a == i32) {
+        return i32(1);
+    } else {
+        return i32(0);
     }
-
-    return i32(0);
 };
-

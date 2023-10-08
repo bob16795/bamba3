@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::parser::*;
 use crate::position::*;
 use crate::scanner;
@@ -31,15 +32,17 @@ impl Parsable for IdentExpression {
 }
 
 impl<'a> Visitable<'a> for IdentExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let val = builtin_type(ctx, self.value.clone(), self.pos.clone());
 
         let val = {
             match val {
                 None => {
-                    return Err(Error {
-                        message: format!("Local value not defined: '{}'", self.value),
-                        pos: Some(self.pos.clone()),
+                    return Err(Error::BambaError {
+                        data: ErrorData::NoLocalError {
+                            local: self.value.clone(),
+                        },
+                        pos: self.pos.clone(),
                     });
                 }
                 Some(v) => v,
@@ -56,15 +59,17 @@ impl<'a> Visitable<'a> for IdentExpression {
         Ok(val.clone())
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         let val = builtin_type(ctx, self.value.clone(), self.pos.clone());
 
         let val = {
             match val {
                 None => {
-                    return Err(Error {
-                        message: format!("Local value not defined: '{}'", self.value),
-                        pos: Some(self.pos.clone()),
+                    return Err(Error::BambaError {
+                        data: ErrorData::NoLocalError {
+                            local: self.value.clone(),
+                        },
+                        pos: self.pos.clone(),
                     });
                 }
                 Some(v) => v,

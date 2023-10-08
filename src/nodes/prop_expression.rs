@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -39,7 +40,7 @@ impl Parsable for PropExpression {
 }
 
 impl<'a> Visitable<'a> for PropExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let kind = self.kind.visit(ctx.clone())?;
         kind.borrow_mut().visit()?;
 

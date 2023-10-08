@@ -4,16 +4,19 @@ def ecs: import "libs/ecs.bam";
 
 def WINDOW_NAME: "GAME";
 
-def SCALE: 3;
+def SCALE: 5;
 
-def WINDOW_DIMS_X: f64(160 * SCALE);
-def WINDOW_DIMS_Y: f64(144 * SCALE);
+def WINDOW_SIZE_X: 160;
+def WINDOW_SIZE_Y: 144;
+
+def WINDOW_DIMS_X: f64(WINDOW_SIZE_X * SCALE);
+def WINDOW_DIMS_Y: f64(WINDOW_SIZE_Y * SCALE);
 
 def TILE_SIZE: f64(8 * SCALE);
 def MAP_SIZE_X: 10;
 def MAP_SIZE_Y: 10;
 def MAP_OFFSET_X: 0;
-def MAP_OFFSET_Y: (144 / 2);
+def MAP_OFFSET_Y: 144 / 2;
 
 def PLAYER_ANIM_BACK: 0;
 def PLAYER_ANIM_FRONT: 1;
@@ -131,6 +134,7 @@ def Player: class {
 def RectCollider: class {
     def offset: prop Vec2;
     def size: prop Vec2;
+    def last_pos: prop Vec2;
 
     def colliding: prop Bool;
 
@@ -160,7 +164,7 @@ def Map: class {
         def y: new usize = usize(0);
 
         while (*y < usize(MAP_SIZE_Y)) {
-            def x: new usize = usize(MAP_SIZE_X);        
+            def x: new usize = usize(MAP_SIZE_X);
 
             while (*x > usize(0)) {
                 x = *x - usize(1);
@@ -341,7 +345,7 @@ def CollisionSystem: class {
 
     def collide: fn[self: *Self] -> Void {
         def i: new usize = usize(0);        
-
+            
         while (*i < *self.base.entities.items.len) {
             def entity: self.base.entities[*i];
 
@@ -366,8 +370,8 @@ def CollisionSystem: class {
             def ay1: *atransform.pos.y + *arect.offset.y;
             def ay2: *atransform.pos.y + *arect.offset.y + *arect.size.y;
 
-            def ax: f64(ax1 / f64(SCALE)) - f64(MAP_OFFSET_X);
-            def ay: f64(ay1 / f64(SCALE)) - f64(MAP_OFFSET_Y);
+            def ax: f64(ax1) - f64(MAP_OFFSET_X);
+            def ay: f64(ay1) - f64(MAP_OFFSET_Y);
 
             def isox: (ax / f64(16)) + (ay / f64(8));
             def isoy: f64(0) - ((ay / f64(8)) - (ax / f64(16)));
@@ -384,6 +388,12 @@ def CollisionSystem: class {
             if (isoy > f64(MAP_SIZE_Y)) {
                 arect.colliding = Bool(true);
             }
+
+            if (*arect.colliding) {
+                atransform.pos = *arect.last_pos;
+            }
+
+            arect.last_pos = *atransform.pos;
 
             def j: new usize = *i + usize(1);        
             while (*j < *self.base.entities.items.len) {
@@ -422,10 +432,10 @@ def CollisionSystem: class {
             def rect: (*RectCollider)(coordinator.getComponent(RectCollider, *entity));
 
             def newRect: new sdl.Rect;
-            newRect.x = i32((*transform.pos.x + *rect.offset.x) / f64(SCALE)) * i32(SCALE);
-            newRect.y = i32((*transform.pos.y + *rect.offset.y) / f64(SCALE)) * i32(SCALE);
-            newRect.w = i32(*rect.size.x);
-            newRect.h = i32(*rect.size.y);
+            newRect.x = i32(*transform.pos.x + *rect.offset.x) * i32(SCALE);
+            newRect.y = i32(*transform.pos.y + *rect.offset.y) * i32(SCALE);
+            newRect.w = i32(*rect.size.x) * i32(SCALE);
+            newRect.h = i32(*rect.size.y) * i32(SCALE);
 
             renderer.drawColor(u8(0), u8(0), u8(255), u8(255));
 
@@ -526,7 +536,7 @@ force def main: fn[] -> i32 {
 
     e = coordinator.createEntity();
 
-    def map: (new Map).init("floor.png");
+    def map: (new Map).init("examples/assets/floor.png");
     def mapDrw: new Drawable = Drawable.init(Map, map);
     
     def trans: (new Transform).init();
@@ -539,16 +549,16 @@ force def main: fn[] -> i32 {
     coordinator.addComponent(Drawable, *e, mapDrw);
 
     def trans: (new Transform).init();
-    trans.pos.x = f64(0);
-    trans.pos.y = f64(0);
+    trans.pos.x = f64(WINDOW_SIZE_X / 2);
+    trans.pos.y = f64(WINDOW_SIZE_Y / 2);
     trans.scale.x = TILE_SIZE * f64(2.0);
     trans.scale.y = TILE_SIZE * f64(2.0);
 
     def rectColl: (new RectCollider).init();
-    rectColl.offset.x = f64(3 * SCALE);
-    rectColl.offset.y = f64(10 * SCALE);
-    rectColl.size.x = f64(10 * SCALE);
-    rectColl.size.y = f64(4 * SCALE);
+    rectColl.offset.x = f64(3);
+    rectColl.offset.y = f64(10);
+    rectColl.size.x = f64(10);
+    rectColl.size.y = f64(4);
 
     e = coordinator.createEntity();
     coordinator.addComponent(Transform, *e, trans);
@@ -556,7 +566,7 @@ force def main: fn[] -> i32 {
     coordinator.addComponent(RigidBody, *e, (new RigidBody).init());
     coordinator.addComponent(RectCollider, *e, rectColl);
     
-    def spr: new Sprite = Sprite.init("player.png");
+    def spr: new Sprite = Sprite.init("examples/assets/player.png");
     
     def plyDrw: new Drawable = Drawable.init(Sprite, spr);
 
@@ -584,11 +594,11 @@ force def main: fn[] -> i32 {
         }
 
         def dt: sdl.getDT();
+        
+        collisionSystem.collide();
 
         playerSystem.update(f64(dt));
         physicsSystem.update(f64(dt));
-
-        collisionSystem.collide();
 
         renderer.drawColor(u8(55), u8(54), u8(74), u8(255));
         renderer.clear();

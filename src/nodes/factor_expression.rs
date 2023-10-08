@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -85,11 +86,11 @@ impl Parsable for FactorExpression {
 }
 
 impl<'a> Visitable<'a> for FactorExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             FactorExpressionChild::Mul(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -99,15 +100,19 @@ impl<'a> Visitable<'a> for FactorExpression {
                         value: NodeV::Visited(Value::ConstInt(a * b)),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a multiply for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "multiply".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
             FactorExpressionChild::Div(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -117,21 +122,25 @@ impl<'a> Visitable<'a> for FactorExpression {
                         value: NodeV::Visited(Value::ConstInt(a / b)),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a divide for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "divide".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
-            FactorExpressionChild::Mod(_l, _r) => Err(Error {
-                message: format!("Todo: visit mod expression"),
-                pos: Some(self.pos.clone()),
+            FactorExpressionChild::Mod(_l, _r) => Err(Error::BambaError {
+                data: ErrorData::TodoError("visit mod expression".to_string()),
+                pos: self.pos.clone(),
             }),
             FactorExpressionChild::UnaryExpression(compare) => compare.visit(ctx),
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             FactorExpressionChild::Mul(l, r) => {
                 let a = l.emit(ctx.clone())?.unwrap();
@@ -141,24 +150,24 @@ impl<'a> Visitable<'a> for FactorExpression {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a * b))),
                     (
                         Value::Value {
-                            val: a,
+                            val: av,
                             kind: a_type,
                         },
                         Value::Value {
-                            val: b,
+                            val: bv,
                             kind: b_type,
                         },
                     ) => {
-                        let a_type = a_type.into();
-                        let b_type = b_type.into();
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
 
                         match (&a_type, &b_type) {
                             (Value::DoubleType, Value::DoubleType) => {
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_float_mul(
-                                    a.into_float_value(),
-                                    b.into_float_value(),
+                                    av.into_float_value(),
+                                    bv.into_float_value(),
                                     "mul",
                                 );
 
@@ -183,20 +192,21 @@ impl<'a> Visitable<'a> for FactorExpression {
                                 },
                             ) => {
                                 if asize != bsize || asign != bsign {
-                                    return Err(Error {
-                                        message: format!(
-                                            "Cant emit an mul for the types {} {}",
-                                            a_type, b_type
-                                        ),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "multiply".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
 
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_int_mul(
-                                    a.into_int_value(),
-                                    b.into_int_value(),
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
                                     "mul",
                                 );
 
@@ -211,19 +221,24 @@ impl<'a> Visitable<'a> for FactorExpression {
                                 }))
                             }
 
-                            _ => Err(Error {
-                                message: format!(
-                                    "Cant emit an mul for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "multiply".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a mul for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "multiply".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -235,24 +250,24 @@ impl<'a> Visitable<'a> for FactorExpression {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a / b))),
                     (
                         Value::Value {
-                            val: a,
+                            val: av,
                             kind: a_type,
                         },
                         Value::Value {
-                            val: b,
+                            val: bv,
                             kind: b_type,
                         },
                     ) => {
-                        let a_type = a_type.into();
-                        let b_type = b_type.into();
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
 
                         match (&a_type, &b_type) {
                             (Value::DoubleType, Value::DoubleType) => {
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_float_div(
-                                    a.into_float_value(),
-                                    b.into_float_value(),
+                                    av.into_float_value(),
+                                    bv.into_float_value(),
                                     "div",
                                 );
 
@@ -277,20 +292,21 @@ impl<'a> Visitable<'a> for FactorExpression {
                                 },
                             ) => {
                                 if asize != bsize || asign != bsign {
-                                    return Err(Error {
-                                        message: format!(
-                                            "Cant emit an div for the types {} {}",
-                                            a_type, b_type
-                                        ),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "divide".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
 
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_int_unsigned_div(
-                                    a.into_int_value(),
-                                    b.into_int_value(),
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
                                     "div",
                                 );
 
@@ -305,19 +321,24 @@ impl<'a> Visitable<'a> for FactorExpression {
                                 }))
                             }
 
-                            _ => Err(Error {
-                                message: format!(
-                                    "Cant emit an div for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "divide".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a div for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "divide".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -329,25 +350,25 @@ impl<'a> Visitable<'a> for FactorExpression {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a % b))),
                     (
                         Value::Value {
-                            val: a,
+                            val: av,
                             kind: a_type,
                         },
                         Value::Value {
-                            val: b,
+                            val: bv,
                             kind: b_type,
                         },
                     ) => {
-                        let a_type = a_type.into();
-                        let b_type = b_type.into();
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
 
                         match (&a_type, &b_type) {
                             (Value::DoubleType, Value::DoubleType) => {
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_float_rem(
-                                    a.into_float_value(),
-                                    b.into_float_value(),
-                                    "div",
+                                    av.into_float_value(),
+                                    bv.into_float_value(),
+                                    "mod",
                                 );
 
                                 Ok(Some(Value::Value {
@@ -371,21 +392,22 @@ impl<'a> Visitable<'a> for FactorExpression {
                                 },
                             ) => {
                                 if asize != bsize || asign != bsign {
-                                    return Err(Error {
-                                        message: format!(
-                                            "Cant emit an div for the types {} {}",
-                                            a_type, b_type
-                                        ),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "mod".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
 
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_int_unsigned_rem(
-                                    a.into_int_value(),
-                                    b.into_int_value(),
-                                    "div",
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
+                                    "mod",
                                 );
 
                                 Ok(Some(Value::Value {
@@ -399,19 +421,24 @@ impl<'a> Visitable<'a> for FactorExpression {
                                 }))
                             }
 
-                            _ => Err(Error {
-                                message: format!(
-                                    "Cant emit an div for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "mod".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a div for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "mod".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }

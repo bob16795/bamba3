@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -47,7 +48,7 @@ impl Parsable for BlockStatement {
 }
 
 impl<'a> Visitable<'a> for BlockStatement {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let sub_ctx = Rc::new(RefCell::new(ctx.borrow().duplicate()));
 
         let res = Rc::new(RefCell::new(Node {
@@ -59,7 +60,7 @@ impl<'a> Visitable<'a> for BlockStatement {
         for node in &self.body {
             let node_visited = node.visit(sub_ctx.clone())?;
 
-            match &node_visited.clone().into() {
+            match &node_visited.clone().try_into()? {
                 Value::VoidType => {}
                 _ => return Ok(node_visited.clone()),
             }
@@ -68,7 +69,7 @@ impl<'a> Visitable<'a> for BlockStatement {
         Ok(res)
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         for node in &self.body {
             node.emit(ctx.clone())?;
         }

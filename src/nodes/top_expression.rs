@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -69,7 +70,7 @@ impl Parsable for TopExpression {
 }
 
 impl<'a> Visitable<'a> for TopExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             TopExpressionChild::Prop(i) => i.visit(ctx),
             TopExpressionChild::Assignment(_l, _r) => {
@@ -85,7 +86,7 @@ impl<'a> Visitable<'a> for TopExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             TopExpressionChild::Prop(i) => i.emit(ctx),
             TopExpressionChild::Assignment(l, r) => {
@@ -101,10 +102,12 @@ impl<'a> Visitable<'a> for TopExpression {
                         Value::ConstNull,
                     ) => {
                         let br = ctx.borrow();
-                        let Value::PointerType(ty) = a_type.into() else {
-                            return Err(Error {
-                                message: format!("Cant create null for type: {}", a),
-                                pos: Some(self.pos.clone()),
+                        let Value::PointerType(ty) = a_type.clone().try_into()? else {
+                            return Err(Error::BambaError {
+                                data: ErrorData::NoNullError {
+                                    kind: a_type.try_into()?,
+                                },
+                                pos: self.pos.clone(),
                             });
                         };
 
@@ -117,9 +120,11 @@ impl<'a> Visitable<'a> for TopExpression {
                             AnyTypeEnum::PointerType(ty) => ty.const_zero().into(),
                             AnyTypeEnum::StructType(ty) => ty.const_zero().into(),
                             _ => {
-                                return Err(Error {
-                                    message: format!("Cant create null for type: {}", ty),
-                                    pos: Some(self.pos.clone()),
+                                return Err(Error::BambaError {
+                                    data: ErrorData::NoNullError {
+                                        kind: a_type.try_into()?,
+                                    },
+                                    pos: self.pos.clone(),
                                 });
                             }
                         };
@@ -141,9 +146,9 @@ impl<'a> Visitable<'a> for TopExpression {
 
                         for c in children {
                             let Value::Value { val: c, kind: _ } = c.borrow().clone() else {
-                                return Err(Error {
-                                    message: format!("Cant eval comptime"),
-                                    pos: Some(self.pos.clone()),
+                                return Err(Error::BambaError {
+                                    data: ErrorData::NoValueError,
+                                    pos: self.pos.clone(),
                                 });
                             };
 
@@ -188,24 +193,24 @@ impl<'a> Visitable<'a> for TopExpression {
                             kind: a_type,
                         },
                         Value::Value {
-                            val: b,
+                            val: bv,
                             kind: b_type,
                         },
                     ) => {
-                        let a_type = &a_type.into();
-                        let b_type = &b_type.into();
+                        let a_type = &a_type.try_into()?;
+                        let b_type = &b_type.try_into()?;
 
                         match (&a_type, &b_type) {
                             (Value::PointerType(kind), Value::Class { .. }) => {
-                                let kind_val: Value = kind.clone().into();
+                                let kind_val: Value = kind.clone().try_into()?;
                                 if kind_val != b_type.clone() {
-                                    return Err(Error {
-                                        message: format!(
-                                            "cant assign incompatible types {}, {}",
-                                            kind_val,
-                                            b_type.clone()
-                                        ),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "assign".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
 
@@ -213,7 +218,7 @@ impl<'a> Visitable<'a> for TopExpression {
 
                                 let _ = br
                                     .builder
-                                    .build_store(av.into_pointer_value(), b.into_struct_value());
+                                    .build_store(av.into_pointer_value(), bv.into_struct_value());
 
                                 Ok(Some(a))
                             }
@@ -222,7 +227,7 @@ impl<'a> Visitable<'a> for TopExpression {
 
                                 let _ = br
                                     .builder
-                                    .build_store(av.into_pointer_value(), b.into_array_value());
+                                    .build_store(av.into_pointer_value(), bv.into_array_value());
 
                                 Ok(Some(a))
                             }
@@ -231,7 +236,7 @@ impl<'a> Visitable<'a> for TopExpression {
 
                                 let _ = br
                                     .builder
-                                    .build_store(av.into_pointer_value(), b.into_float_value());
+                                    .build_store(av.into_pointer_value(), bv.into_float_value());
 
                                 Ok(Some(a))
                             }
@@ -240,7 +245,7 @@ impl<'a> Visitable<'a> for TopExpression {
 
                                 let _ = br
                                     .builder
-                                    .build_store(av.into_pointer_value(), b.into_int_value());
+                                    .build_store(av.into_pointer_value(), bv.into_int_value());
 
                                 Ok(Some(a))
                             }
@@ -249,23 +254,28 @@ impl<'a> Visitable<'a> for TopExpression {
 
                                 let _ = br
                                     .builder
-                                    .build_store(av.into_pointer_value(), b.into_pointer_value());
+                                    .build_store(av.into_pointer_value(), bv.into_pointer_value());
 
                                 Ok(Some(a))
                             }
-                            _ => Err(Error {
-                                message: format!(
-                                    "Cant emit an assign for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "assign".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit an assign for the vals {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "assign".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }

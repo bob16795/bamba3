@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -37,7 +38,7 @@ impl Parsable for ExpressionStatement {
 }
 
 impl<'a> Visitable<'a> for ExpressionStatement {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         self.expr.visit(ctx.clone())?;
 
         Ok(Rc::new(RefCell::new(Node {
@@ -47,7 +48,7 @@ impl<'a> Visitable<'a> for ExpressionStatement {
         })))
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         self.expr.emit(ctx)
     }
 }

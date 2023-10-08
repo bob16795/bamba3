@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -58,14 +59,17 @@ impl Parsable for WhileStatement {
 }
 
 impl<'a> Visitable<'a> for WhileStatement {
-    fn visit(&self, _ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
-        Err(Error {
-            message: format!("visit if statement not implemented"),
-            pos: Some(self.pos.clone()),
+    fn visit(
+        &self,
+        _ctx: Rc<RefCell<NodeContext<'a>>>,
+    ) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
+        Err(Error::BambaError {
+            data: ErrorData::TodoError("visit if statement".to_string()),
+            pos: self.pos.clone(),
         })
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         let (head_bb, body_bb, merge_bb) = {
             let context = &ctx.borrow();
 
@@ -89,11 +93,11 @@ impl<'a> Visitable<'a> for WhileStatement {
 
         let tmp = self.expr.emit(ctx.clone())?;
         return match tmp {
-            None => Err(Error {
-                message: format!("expected value"),
-                pos: Some(self.pos.clone()),
+            None => Err(Error::BambaError {
+                pos: self.pos.clone(),
+                data: ErrorData::NoValueError,
             }),
-            Some(Value::Value { val, kind: _ }) => match &val.as_ref() {
+            Some(Value::Value { val, kind }) => match &val.clone().as_ref() {
                 BasicValueEnum::IntValue(i) => {
                     let old_break = {
                         let context = &mut ctx.borrow_mut();
@@ -134,14 +138,16 @@ impl<'a> Visitable<'a> for WhileStatement {
 
                     Ok(None)
                 }
-                _ => Err(Error {
-                    message: format!("cant check if {} is zero", val),
-                    pos: Some(self.pos.clone()),
+                _ => Err(Error::BambaError {
+                    pos: self.pos.clone(),
+                    data: ErrorData::ZeroCompareError {
+                        value: kind.try_into()?,
+                    },
                 }),
             },
-            _ => Err(Error {
-                message: format!("cant check if {} is zero", tmp.unwrap()),
-                pos: Some(self.pos.clone()),
+            Some(tmp) => Err(Error::BambaError {
+                pos: self.pos.clone(),
+                data: ErrorData::ZeroCompareError { value: tmp.clone() },
             }),
         };
     }

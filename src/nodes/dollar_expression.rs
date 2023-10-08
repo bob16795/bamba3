@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -10,7 +11,7 @@ use std::rc::Rc;
 pub struct DollarExpression {
     pos: FileRange,
 
-    vals: Vec<top_expression::TopExpression>,
+    vals: Vec<(top_expression::TopExpression, Option<String>)>,
 }
 
 impl Parsable for DollarExpression {
@@ -22,19 +23,19 @@ impl Parsable for DollarExpression {
             return None;
         }
 
-        if scn.match_next(scanner::TokenKind::LeftBrace).is_none() {
+        if scn.match_next(scanner::TokenKind::LeftBracket).is_none() {
             (scn.slice, scn.pos) = start;
             return None;
         }
 
         let mut vals = Vec::new();
 
-        while scn.match_next(scanner::TokenKind::RightBrace).is_none() {
+        while scn.match_next(scanner::TokenKind::RightBracket).is_none() {
             let def = top_expression::TopExpression::parse(scn);
             if def.is_some() {
-                vals.push(def.unwrap());
+                vals.push((def.unwrap(), None));
                 if scn.match_next(scanner::TokenKind::Comma).is_none() {
-                    if scn.match_next(scanner::TokenKind::RightBrace).is_none() {
+                    if scn.match_next(scanner::TokenKind::RightBracket).is_none() {
                         (scn.slice, scn.pos) = start;
 
                         return None;
@@ -43,7 +44,7 @@ impl Parsable for DollarExpression {
                     break;
                 }
             } else {
-                if scn.match_next(scanner::TokenKind::RightBrace).is_none() {
+                if scn.match_next(scanner::TokenKind::RightBracket).is_none() {
                     (scn.slice, scn.pos) = start;
                     return None;
                 }
@@ -60,11 +61,11 @@ impl Parsable for DollarExpression {
 }
 
 impl<'a> Visitable<'a> for DollarExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let mut children = Vec::new();
 
         for c in &self.vals {
-            children.push(Rc::new(RefCell::new(c.visit(ctx.clone())?.into())));
+            children.push(Rc::new(RefCell::new(c.0.visit(ctx.clone())?.try_into()?)));
         }
 
         Ok(Rc::new(RefCell::new(Node {
@@ -74,11 +75,11 @@ impl<'a> Visitable<'a> for DollarExpression {
         })))
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         let mut children = Vec::new();
 
         for c in &self.vals {
-            children.push(Rc::new(RefCell::new(c.emit(ctx.clone())?.unwrap())));
+            children.push(Rc::new(RefCell::new(c.0.emit(ctx.clone())?.unwrap())));
         }
 
         Ok(Some(Value::Tuple { children }))

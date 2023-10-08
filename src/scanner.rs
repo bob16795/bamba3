@@ -10,6 +10,7 @@ pub enum TokenKind {
     LeftParen,
     RightParen,
 
+    Underscore,
     SemiColon,
     Ampersand,
     Percent,
@@ -386,6 +387,7 @@ impl Iterator for Scanner {
             ')' => TokenKind::RightParen,
             '[' => TokenKind::LeftBracket,
             ']' => TokenKind::RightBracket,
+            '_' => TokenKind::Underscore,
             ';' => TokenKind::SemiColon,
             ':' => TokenKind::Colon,
             '/' => TokenKind::Slash,

@@ -137,6 +137,18 @@ def Event: class {
     def BaseEvent: class {
         def type: prop u32;
     };
+    
+    def KeyEvent: class {
+        def type: prop u32;
+        
+        def timestamp: prop u32;
+        def window_id: prop WindowId;
+        def state: prop u8;
+        def repeat: prop u8;
+        def padding2: prop u8;
+        def padding3: prop u8;
+        def keysym: prop KeySym;
+    };
 
     def base: prop BaseEvent;
 
@@ -149,18 +161,6 @@ def Event: class {
     };
 };
     
-def KeyEvent: class {
-    def type: prop u32;
-    
-    def timestamp: prop u32;
-    def window_id: prop WindowId;
-    def state: prop u8;
-    def repeat: prop u8;
-    def padding2: prop u8;
-    def padding3: prop u8;
-    def keysym: prop KeySym;
-};
-
 def Rect: class {
     def x: prop i32;
     def y: prop i32;

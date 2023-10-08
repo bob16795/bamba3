@@ -1,8 +1,10 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::scanner;
 use crate::visitable::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -112,7 +114,7 @@ impl Parsable for PrimaryExpression {
 }
 
 impl<'a> Visitable<'a> for PrimaryExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             PrimaryExpressionChild::Comptime(i) => i.expr.visit(ctx.clone()),
             PrimaryExpressionChild::Ident(i) => i.visit(ctx),
@@ -141,11 +143,13 @@ impl<'a> Visitable<'a> for PrimaryExpression {
             PrimaryExpressionChild::Class(cls) => {
                 let sub_ctx = Rc::new(RefCell::new(ctx.borrow().duplicate()));
 
+                let children = Rc::new(RefCell::new(HashMap::new()));
+
                 let res = Rc::new(RefCell::new(Node {
                     pos: cls.pos.clone(),
                     value: NodeV::Visited(Value::Class {
                         kind: Rc::new(RefCell::new(None)),
-                        children: sub_ctx.borrow().locals.clone(),
+                        children: children.clone(),
                         name: "Anon".to_string(),
                     }),
                     ctx: sub_ctx.clone(),
@@ -177,6 +181,9 @@ impl<'a> Visitable<'a> for PrimaryExpression {
                         ctx: Rc::new(RefCell::new(sub_ctx.borrow().duplicate())),
                     }));
 
+                    let cb = &mut children.borrow_mut();
+                    cb.insert(def.name.clone(), b.clone());
+
                     sub_ctx
                         .borrow_mut()
                         .locals
@@ -204,17 +211,18 @@ impl<'a> Visitable<'a> for PrimaryExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             PrimaryExpressionChild::Ident(i) => i.emit(ctx),
             PrimaryExpressionChild::ConstString(i) => i.emit(ctx),
             PrimaryExpressionChild::Paren(i) => i.emit(ctx),
             PrimaryExpressionChild::ConstInt(i) => Ok(Some(Value::ConstInt(i.value))),
             PrimaryExpressionChild::ConstReal(i) => Ok(Some(Value::ConstReal(i.value))),
-            PrimaryExpressionChild::Function(_) => Ok(Some(self.visit(ctx.clone())?.into())),
+            PrimaryExpressionChild::Function(_) => Ok(Some(self.visit(ctx.clone())?.try_into()?)),
             PrimaryExpressionChild::New(i) => i.emit(ctx),
-            PrimaryExpressionChild::Comptime(i) => Ok(Some(i.expr.visit(ctx.clone())?.into())),
+            PrimaryExpressionChild::Comptime(i) => Ok(Some(i.expr.visit(ctx.clone())?.try_into()?)),
             PrimaryExpressionChild::Dollar(i) => i.emit(ctx),
+            PrimaryExpressionChild::Class(_) => Ok(Some(self.visit(ctx.clone())?.try_into()?)),
             v => todo!("{:?}", v),
         }
     }

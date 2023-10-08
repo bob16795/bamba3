@@ -1,6 +1,6 @@
 def std: import "std/std.bam";
 
-def tmp: ${i32(0), i32(1), i32(4), i32(3), i32(4)};
+def tmp: $[i32(0), i32(1), i32(4), i32(3), i32(4)];
 def SliceT: std.Types.Slice(i32);
 
 def printf: extern fn[] -> Void;
@@ -24,8 +24,7 @@ def printSlice: fn[slice: *SliceT] -> Void {
 force def main: fn[] -> i32 {
     def data: new i32[5] = tmp;
     def slice: new SliceT = SliceT.initFrom(data, usize(5));
-    def range: std.Types.Range.init(usize(2), usize(5));
-    def subSlice: new SliceT = slice.cut(range);
+    def subSlice: new SliceT = slice.cut(std.Types.Range($[usize(2), usize(5)]));
 
     printSlice(slice);
     printSlice(subSlice);

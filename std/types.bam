@@ -34,11 +34,12 @@ def Slice: fn[T] -> Class {
             return *result;
         };
 
-        def cut: fn[self: *Self, range: *Range] -> Self {
+        def cut: fn[self: *Self, range: Range] -> Self {
             def result: new Self;
+            def tmp_range: new Range = range;
 
-            result.ptr = usize(*self.ptr) + (usize)(*range.start * itemSize);
-            result.len = *range.end - *range.start;
+            result.ptr = usize(*self.ptr) + (usize)(*tmp_range.start * itemSize);
+            result.len = *tmp_range.end - *tmp_range.start;
 
             return *result;
         };
@@ -141,6 +142,10 @@ def ArrayList: fn[T] -> Class {
 
 def Closure: fn[I, P, O, Func] -> Class {
     return class {
+        def I: I;
+        def P: P;
+        def O: O;
+
         def data: prop I;
 
         def init: fn[inside: I] -> Self {
@@ -189,8 +194,6 @@ def Interface: fn[V, D] -> Class {
         for FnEntry in (Result.VTable.LIST) {
             def entryName: FnEntry[0];
 
-            @PRINT(entryName);
-            
             @GET_PROP(result.vtable, entryName) = @GET_PROP(T, entryName);
         }
 

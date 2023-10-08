@@ -1,15 +1,12 @@
-use crate::nodes::top_expression;
+use crate::errors::*;
 use crate::parser::Parsable;
-use crate::position::FileRange;
 use crate::scanner;
 use crate::visitable::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
-pub struct BreakStatement {
-    pos: FileRange,
-}
+pub struct BreakStatement {}
 
 impl Parsable for BreakStatement {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
@@ -25,21 +22,22 @@ impl Parsable for BreakStatement {
             return None;
         }
 
-        return Some(BreakStatement {
-            pos: (start.1..scn.pos.clone()).into(),
-        });
+        return Some(BreakStatement {});
     }
 }
 
 impl<'a> Visitable<'a> for BreakStatement {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(
+        &self,
+        _ctx: Rc<RefCell<NodeContext<'a>>>,
+    ) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         todo!();
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         let b = ctx.borrow();
-        
-        b.builder.build_unconditional_branch(b.break_pos.unwrap());
+
+        let _ = b.builder.build_unconditional_branch(b.break_pos.unwrap());
 
         Ok(None)
     }

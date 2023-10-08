@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -150,7 +151,7 @@ impl Parsable for FunctionExpression {
 }
 
 impl<'a> Visitable<'a> for FunctionExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let mut kind = FunctionKind::Standard;
         if self.ext {
             kind = FunctionKind::Extern;
@@ -193,10 +194,10 @@ impl<'a> Visitable<'a> for FunctionExpression {
         })))
     }
 
-    fn emit(&self, _ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
-        Err(Error {
-            message: format!("Todo: emit function expr"),
-            pos: Some(self.pos.clone()),
+    fn emit(&self, _ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
+        Err(Error::BambaError {
+            data: ErrorData::TodoError("Todo: emit function expr".to_string()),
+            pos: self.pos.clone(),
         })
     }
 }

@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::*;
@@ -38,20 +39,23 @@ impl Parsable for NewExpression {
 }
 
 impl<'a> Visitable<'a> for NewExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let base_kind = self.kind.visit(ctx.clone())?;
         let bc = ctx.borrow();
 
-        let kind: BasicTypeEnum = match base_kind.borrow_mut().get_type()?.as_ref() {
+        let kind: BasicTypeEnum = match base_kind.clone().borrow_mut().get_type()?.as_ref() {
             AnyTypeEnum::ArrayType(a) => a.clone().into(),
             AnyTypeEnum::FloatType(a) => a.clone().into(),
             AnyTypeEnum::IntType(a) => a.clone().into(),
             AnyTypeEnum::PointerType(a) => a.clone().into(),
             AnyTypeEnum::StructType(a) => a.clone().into(),
-            a => {
-                return Err(Error {
-                    message: format!("cant deref type ptr {}", a),
-                    pos: Some(self.pos.clone()),
+            _ => {
+                return Err(Error::BambaError {
+                    data: ErrorData::VisitUnaryOpError {
+                        kind: "new".to_string(),
+                        a: base_kind.try_into()?,
+                    },
+                    pos: self.pos.clone(),
                 })
             }
         };
@@ -74,7 +78,7 @@ impl<'a> Visitable<'a> for NewExpression {
         })))
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         let base_kind = self.kind.emit(ctx.clone())?.unwrap();
 
         let base_kind = Rc::new(RefCell::new(Node {
@@ -146,9 +150,12 @@ impl<'a> Visitable<'a> for NewExpression {
                 })),
             })),
 
-            t => Err(Error {
-                pos: Some(self.pos.clone()),
-                message: format!("new for type not implemented {}", t),
+            _ => Err(Error::BambaError {
+                data: ErrorData::EmitUnaryOpError {
+                    kind: "new".to_string(),
+                    a: base_kind.try_into()?,
+                },
+                pos: self.pos.clone(),
             }),
         }
     }

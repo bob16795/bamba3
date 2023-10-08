@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -60,12 +61,14 @@ impl Parsable for ForStatement {
 }
 
 impl<'a> Visitable<'a> for ForStatement {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let val = self.expr.visit(ctx.clone())?;
-        let Value::Tuple { children } = val.clone().into() else {
-            return Err(Error {
-                message: format!("expected tuple type for for statment"),
-                pos: Some(self.pos.clone()),
+        let Value::Tuple { children } = val.clone().try_into()? else {
+            return Err(Error::BambaError {
+                data: ErrorData::IterateError {
+                    kind: val.try_into()?,
+                },
+                pos: self.pos.clone(),
             });
         };
 

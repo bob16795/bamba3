@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -53,11 +54,11 @@ impl Parsable for OrExpression {
 }
 
 impl<'a> Visitable<'a> for OrExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             OrExpressionChild::Or(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -67,9 +68,13 @@ impl<'a> Visitable<'a> for OrExpression {
                         value: NodeV::Visited(Value::ConstInt(a | b)),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant visit a or for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "or".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -77,7 +82,7 @@ impl<'a> Visitable<'a> for OrExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             OrExpressionChild::Or(l, r) => {
                 let a = l.emit(ctx.clone())?.unwrap();
@@ -86,9 +91,13 @@ impl<'a> Visitable<'a> for OrExpression {
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a | b))),
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a or for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "or".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }

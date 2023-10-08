@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::parser::*;
 use crate::position::*;
 use crate::scanner;
@@ -31,7 +32,7 @@ impl Parsable for ConstStringExpression {
 }
 
 impl<'a> Visitable<'a> for ConstStringExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let val = self.value.to_string();
         Ok(Rc::new(RefCell::new(Node {
             pos: self.pos.clone(),
@@ -40,7 +41,7 @@ impl<'a> Visitable<'a> for ConstStringExpression {
         })))
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         let ctxb = ctx.borrow();
 
         let val = self.value.to_string();

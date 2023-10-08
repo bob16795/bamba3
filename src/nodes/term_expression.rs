@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -69,13 +70,13 @@ impl Parsable for TermExpression {
 }
 
 impl<'a> Visitable<'a> for TermExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             TermExpressionChild::Sub(l, r) => {
                 let a = l.visit(ctx.clone())?;
                 let b = r.visit(ctx.clone())?;
 
-                match (a.into(), b.into()) {
+                match (a.try_into()?, b.try_into()?) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
                         ctx: ctx.clone(),
                         pos: self.pos.clone(),
@@ -86,9 +87,13 @@ impl<'a> Visitable<'a> for TermExpression {
                         pos: self.pos.clone(),
                         value: NodeV::Visited(Value::ConstReal(a - b)),
                     }))),
-                    (a, b) => Err(Error {
-                        message: format!("Cant visit a subtract for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    (a, b) => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "subtract".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -96,7 +101,7 @@ impl<'a> Visitable<'a> for TermExpression {
                 let a = l.visit(ctx.clone())?;
                 let b = r.visit(ctx.clone())?;
 
-                match (a.into(), b.into()) {
+                match (a.try_into()?, b.try_into()?) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
                         ctx: ctx.clone(),
                         pos: self.pos.clone(),
@@ -107,9 +112,13 @@ impl<'a> Visitable<'a> for TermExpression {
                         pos: self.pos.clone(),
                         value: NodeV::Visited(Value::ConstReal(a + b)),
                     }))),
-                    (a, b) => Err(Error {
-                        message: format!("Cant visit a add for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    (a, b) => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "add".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -117,7 +126,7 @@ impl<'a> Visitable<'a> for TermExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             TermExpressionChild::Sub(l, r) => {
                 let a = l.emit(ctx.clone())?.unwrap();
@@ -128,24 +137,24 @@ impl<'a> Visitable<'a> for TermExpression {
                     (Value::ConstReal(a), Value::ConstReal(b)) => Ok(Some(Value::ConstReal(a - b))),
                     (
                         Value::Value {
-                            val: a,
+                            val: av,
                             kind: a_type,
                         },
                         Value::Value {
-                            val: b,
+                            val: bv,
                             kind: b_type,
                         },
                     ) => {
-                        let a_type = a_type.into();
-                        let b_type = b_type.into();
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
 
                         match (&a_type, &b_type) {
                             (Value::DoubleType, Value::DoubleType) => {
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_float_sub(
-                                    a.into_float_value(),
-                                    b.into_float_value(),
+                                    av.into_float_value(),
+                                    bv.into_float_value(),
                                     "sub",
                                 );
 
@@ -170,20 +179,21 @@ impl<'a> Visitable<'a> for TermExpression {
                                 },
                             ) => {
                                 if asize != bsize || asign != bsign {
-                                    return Err(Error {
-                                        message: format!(
-                                            "Cant emit an subtract for the types {} {}",
-                                            a_type, b_type
-                                        ),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "subtract".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
 
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_int_sub(
-                                    a.into_int_value(),
-                                    b.into_int_value(),
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
                                     "subtract",
                                 );
 
@@ -198,19 +208,24 @@ impl<'a> Visitable<'a> for TermExpression {
                                 }))
                             }
 
-                            _ => Err(Error {
-                                message: format!(
-                                    "Cant emit a subtract for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "subtract".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a subtract for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "subtract".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -222,24 +237,24 @@ impl<'a> Visitable<'a> for TermExpression {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a + b))),
                     (
                         Value::Value {
-                            val: a,
+                            val: av,
                             kind: a_type,
                         },
                         Value::Value {
-                            val: b,
+                            val: bv,
                             kind: b_type,
                         },
                     ) => {
-                        let a_type = a_type.into();
-                        let b_type = b_type.into();
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
 
                         match (&a_type, &b_type) {
                             (Value::DoubleType, Value::DoubleType) => {
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_float_add(
-                                    a.into_float_value(),
-                                    b.into_float_value(),
+                                    av.into_float_value(),
+                                    bv.into_float_value(),
                                     "add",
                                 );
 
@@ -264,20 +279,21 @@ impl<'a> Visitable<'a> for TermExpression {
                                 },
                             ) => {
                                 if asize != bsize || asign != bsign {
-                                    return Err(Error {
-                                        message: format!(
-                                            "Cant emit an add for the types {} {}",
-                                            a_type, b_type
-                                        ),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "add".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
 
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_int_add(
-                                    a.into_int_value(),
-                                    b.into_int_value(),
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
                                     "add",
                                 );
 
@@ -292,19 +308,24 @@ impl<'a> Visitable<'a> for TermExpression {
                                 }))
                             }
 
-                            _ => Err(Error {
-                                message: format!(
-                                    "Cant emit an add for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "add".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a subtract for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "add".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }

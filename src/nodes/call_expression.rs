@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -136,7 +137,7 @@ impl Parsable for CallExpression {
 }
 
 impl<'a> Visitable<'a> for CallExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             CallExpressionChild::Index {
                 parent: child,
@@ -144,29 +145,29 @@ impl<'a> Visitable<'a> for CallExpression {
             } => {
                 let child = child.visit(ctx.clone())?;
 
-                match child.clone().into() {
+                match child.clone().try_into()? {
                     Value::ConstString(_) => {
                         todo!();
                     }
                     Value::Tuple { children } => {
                         let Some(idx) = index else {
-                            return Err(Error {
-                                message: format!("cant emit empty index for tuple"),
-                                pos: Some(self.pos.clone()),
+                            return Err(Error::BambaError {
+                                data: ErrorData::TodoError("lol".to_string()),
+                                pos: self.pos.clone(),
                             });
                         };
 
                         let index = idx.visit(ctx.clone())?;
 
-                        match index.into() {
+                        match index.try_into()? {
                             Value::ConstInt(i) => Ok(Rc::new(RefCell::new(Node {
                                 pos: self.pos.clone(),
                                 value: NodeV::Visited(children[i as usize].borrow().clone()),
                                 ctx: ctx.clone(),
                             }))),
-                            _ => Err(Error {
-                                message: format!("index must be const int"),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::TodoError("lol".to_string()),
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
@@ -188,7 +189,7 @@ impl<'a> Visitable<'a> for CallExpression {
 
                         let index = idx.visit(ctx.clone())?;
 
-                        match index.into() {
+                        match index.try_into()? {
                             Value::ConstInt(i) => Ok(Rc::new(RefCell::new(Node {
                                 pos: self.pos.clone(),
                                 value: NodeV::Visited(Value::ArrayType {
@@ -197,18 +198,35 @@ impl<'a> Visitable<'a> for CallExpression {
                                 }),
                                 ctx: ctx.clone(),
                             }))),
-                            _ => Err(Error {
-                                message: format!("index must be const int"),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::TodoError("lol".to_string()),
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
-                    _ => {
-                        return Err(Error {
-                            message: format!("cant emit index for type"),
-                            pos: Some(self.pos.clone()),
-                        });
-                    }
+                    _ => match index {
+                        None => {
+                            return Err(Error::BambaError {
+                                data: ErrorData::VisitUnaryOpError {
+                                    kind: "index".to_string(),
+                                    a: child.try_into()?,
+                                },
+                                pos: self.pos.clone(),
+                            })
+                        }
+                        Some(idx) => {
+                            let index = idx.visit(ctx.clone())?;
+
+                            return Err(Error::BambaError {
+                                data: ErrorData::VisitBinaryOpError {
+                                    kind: "index".to_string(),
+                                    a: child.try_into()?,
+                                    b: index.try_into()?,
+                                },
+                                pos: self.pos.clone(),
+                            });
+                        }
+                    },
                 }
             }
             CallExpressionChild::Access { parent, prop } => {
@@ -224,12 +242,12 @@ impl<'a> Visitable<'a> for CallExpression {
                     Value::BuiltinFunc(BuiltinFunc::Print) => {
                         let p0 = params[0].visit(ctx.clone())?;
 
-                        let name = match p0.into() {
+                        let name = match p0.try_into()? {
                             Value::ConstString(s) => s,
-                            v => {
-                                return Err(Error {
-                                    message: format!("Invalid string type {}", v),
-                                    pos: None,
+                            kind => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind },
+                                    pos: self.pos.clone(),
                                 })
                             }
                         };
@@ -247,12 +265,12 @@ impl<'a> Visitable<'a> for CallExpression {
 
                         let p1 = params[1].visit(ctx.clone())?;
 
-                        let name = match p1.into() {
+                        let name = match p1.try_into()? {
                             Value::ConstString(s) => s,
-                            v => {
-                                return Err(Error {
-                                    message: format!("Invalid string type {}", v),
-                                    pos: None,
+                            kind => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind },
+                                    pos: self.pos.clone(),
                                 })
                             }
                         };
@@ -270,21 +288,23 @@ impl<'a> Visitable<'a> for CallExpression {
                     Value::BuiltinFunc(BuiltinFunc::AddDef) => {
                         let p0 = params[0].visit(ctx.clone())?;
 
-                        let Value::Class { children, .. } = p0.clone().into() else {
-                            return Err(Error {
-                                message: format!("Cant add def to non class type {}", p0.borrow()),
-                                pos: None,
+                        let Value::Class { children, .. } = p0.clone().try_into()? else {
+                            return Err(Error::BambaError {
+                                data: ErrorData::ClassError {
+                                    kind: p0.try_into()?,
+                                },
+                                pos: self.pos.clone(),
                             });
                         };
 
                         let p1 = params[1].visit(ctx.clone())?;
 
-                        let name = match p1.into() {
+                        let name = match p1.try_into()? {
                             Value::ConstString(s) => s,
-                            v => {
-                                return Err(Error {
-                                    message: format!("Invalid string type {}", v),
-                                    pos: None,
+                            kind => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind },
+                                    pos: self.pos.clone(),
                                 })
                             }
                         };
@@ -341,11 +361,11 @@ impl<'a> Visitable<'a> for CallExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             CallExpressionChild::Index { parent, index } => {
                 let Some(idx) = index else {
-                    return Ok(Some(self.visit(ctx)?.into()));
+                    return Ok(Some(self.visit(ctx)?.try_into()?));
                 };
 
                 let parent = parent.emit(ctx.clone())?;
@@ -357,11 +377,15 @@ impl<'a> Visitable<'a> for CallExpression {
                         let cb = ctx.clone();
                         let cb = cb.borrow();
 
-                        let k: Value = kind.clone().into();
+                        let k: Value = kind.clone().try_into()?;
                         let Value::PointerType(k) = k else {
-                            return Err(Error {
-                                message: format!("cant emit index access for non pointer type"),
-                                pos: Some(self.pos.clone()),
+                            return Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "index".to_string(),
+                                    a: parent.unwrap(),
+                                    b: index.unwrap(),
+                                },
+                                pos: self.pos.clone(),
                             });
                         };
 
@@ -371,26 +395,31 @@ impl<'a> Visitable<'a> for CallExpression {
                             AnyTypeEnum::ArrayType(t) => t.get_element_type().clone().into(),
                             AnyTypeEnum::PointerType(t) => t.clone().into(),
                             AnyTypeEnum::StructType(t) => t.clone().into(),
-                            t => {
-                                return Err(Error {
-                                    message: format!("cant emit index access for {}", t),
-                                    pos: Some(self.pos.clone()),
-                                })
+                            _ => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::EmitBinaryOpError {
+                                        kind: "index".to_string(),
+                                        a: parent.unwrap(),
+                                        b: index.unwrap(),
+                                    },
+                                    pos: self.pos.clone(),
+                                });
                             }
                         };
 
-                        let Value::PointerType(kind_val) = kind.clone().into() else {
+                        let Value::PointerType(kind_val) = kind.clone().try_into()? else {
                             todo!();
                         };
 
                         let Value::ArrayType {
                             child: kind,
                             size: _,
-                        } = kind_val.clone().into()
+                        } = kind_val.clone().try_into()?
                         else {
-                            let Value::Class { children, name, .. } = kind_val.clone().into()
+                            let Value::Class { children, name, .. } =
+                                kind_val.clone().try_into()?
                             else {
-                                let v: Value = kind_val.into();
+                                let v: Value = kind_val.try_into()?;
                                 todo!("{}", v);
                             };
 
@@ -400,9 +429,12 @@ impl<'a> Visitable<'a> for CallExpression {
                                 match children.get("[]") {
                                     Some(v) => v.clone(),
                                     None => {
-                                        return Err(Error {
-                                            message: format!("struct '{}' dosent have `[]`", name),
-                                            pos: Some(self.pos.clone()),
+                                        return Err(Error::BambaError {
+                                            data: ErrorData::NoChildError {
+                                                child: name,
+                                                parent: kind_val.try_into()?,
+                                            },
+                                            pos: self.pos.clone(),
                                         })
                                     }
                                 }
@@ -462,14 +494,7 @@ impl<'a> Visitable<'a> for CallExpression {
                             kind,
                         }))
                     }
-                    _ => Err(Error {
-                        message: format!(
-                            "cant emit index for types {} {}",
-                            parent.unwrap(),
-                            index.unwrap()
-                        ),
-                        pos: Some(self.pos.clone()),
-                    }),
+                    _ => Ok(Some(self.visit(ctx.clone())?.try_into()?)),
                 }
             }
             CallExpressionChild::Access { parent, prop } => {
@@ -483,7 +508,7 @@ impl<'a> Visitable<'a> for CallExpression {
 
                 parent.visit()?;
 
-                Ok(Some(parent.get_child(prop.to_string())?.into()))
+                Ok(Some(parent.get_child(prop.to_string())?.try_into()?))
             }
             CallExpressionChild::Call { func, params } => {
                 let func = func.emit(ctx.clone())?.unwrap();
@@ -494,12 +519,12 @@ impl<'a> Visitable<'a> for CallExpression {
 
                         let p1 = params[1].visit(ctx.clone())?;
 
-                        let name = match p1.into() {
+                        let name = match p1.try_into()? {
                             Value::ConstString(s) => s,
                             v => {
-                                return Err(Error {
-                                    message: format!("Invalid string type {}", v),
-                                    pos: None,
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind: v },
+                                    pos: self.pos.clone(),
                                 })
                             }
                         };
@@ -515,38 +540,40 @@ impl<'a> Visitable<'a> for CallExpression {
 
                         let p1 = params[1].visit(ctx.clone())?;
 
-                        let name = match p1.into() {
+                        let name = match p1.try_into()? {
                             Value::ConstString(s) => s,
                             v => {
-                                return Err(Error {
-                                    message: format!("Invalid string type {}", v),
-                                    pos: None,
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind: v },
+                                    pos: self.pos.clone(),
                                 })
                             }
                         };
 
                         p0.borrow_mut().set_name(name)?;
 
-                        Ok(Some(p0.into()))
+                        Ok(Some(p0.try_into()?))
                     }
                     Value::BuiltinFunc(BuiltinFunc::AddDef) => {
                         let p0 = params[0].visit(ctx.clone())?;
 
-                        let Value::Class { children, .. } = p0.clone().into() else {
-                            return Err(Error {
-                                message: format!("Cant add def to non class type {}", p0.borrow()),
-                                pos: None,
+                        let Value::Class { children, .. } = p0.clone().try_into()? else {
+                            return Err(Error::BambaError {
+                                data: ErrorData::ClassError {
+                                    kind: p0.try_into()?,
+                                },
+                                pos: self.pos.clone(),
                             });
                         };
 
                         let p1 = params[1].visit(ctx.clone())?;
 
-                        let name = match p1.into() {
+                        let name = match p1.try_into()? {
                             Value::ConstString(s) => s,
-                            v => {
-                                return Err(Error {
-                                    message: format!("Invalid string type {}", v),
-                                    pos: None,
+                            kind => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind },
+                                    pos: self.pos.clone(),
                                 })
                             }
                         };

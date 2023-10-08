@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::parser::*;
 use crate::position::FileRange;
 use crate::scanner;
@@ -36,7 +37,7 @@ impl Parsable for IncludeExpression {
 }
 
 impl<'a> Visitable<'a> for IncludeExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let ctx_borrow = &mut ctx.borrow_mut();
 
         let file = ctx_borrow.files.get_mut().get_mut(&self.file);
@@ -69,9 +70,11 @@ impl<'a> Visitable<'a> for IncludeExpression {
                     None => {
                         let range: FileRange = (scn.pos.clone()..scn.far).into();
 
-                        return Err(Error {
-                            pos: Some(range),
-                            message: format!("couldnt parse file {}", self.file),
+                        return Err(Error::BambaError {
+                            data: ErrorData::ParseError {
+                                file: self.file.clone(),
+                            },
+                            pos: range,
                         });
                     }
                 }
@@ -79,7 +82,7 @@ impl<'a> Visitable<'a> for IncludeExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
-        Ok(Some(self.visit(ctx)?.into()))
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
+        Ok(Some(self.visit(ctx)?.try_into()?))
     }
 }

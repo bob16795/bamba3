@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -31,7 +32,7 @@ impl<'a> CompareExpression {
         a: &Value<'a>,
         b: &Value<'a>,
         p: IntPredicate,
-    ) -> Result<Option<Value<'a>>, Error> {
+    ) -> Result<Option<Value<'a>>, Error<'a>> {
         match (a.clone(), b.clone()) {
             (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt({
                 match p {
@@ -54,16 +55,16 @@ impl<'a> CompareExpression {
             }))),
             (
                 Value::Value {
-                    val: a,
+                    val: av,
                     kind: a_type,
                 },
                 Value::Value {
-                    val: b,
+                    val: bv,
                     kind: b_type,
                 },
             ) => {
-                let a_type = a_type.into();
-                let b_type = b_type.into();
+                let a_type = a_type.try_into()?;
+                let b_type = b_type.try_into()?;
 
                 match (&a_type, &b_type) {
                     (Value::DoubleType, Value::DoubleType) => {
@@ -76,14 +77,18 @@ impl<'a> CompareExpression {
                                 IntPredicate::ULT => FloatPredicate::ULT,
                                 IntPredicate::UGT => FloatPredicate::UGT,
                                 _ => {
-                                    return Err(Error {
-                                        message: format!("todo, {:?}", p),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "compare".to_string(),
+                                            a: a.clone(),
+                                            b: b.clone(),
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
                             },
-                            a.into_float_value(),
-                            b.into_float_value(),
+                            av.into_float_value(),
+                            bv.into_float_value(),
                             "compare",
                         );
 
@@ -101,14 +106,15 @@ impl<'a> CompareExpression {
                         }))
                     }
                     (Value::PointerType(atype), Value::PointerType(btype)) => {
-                        let btype: Value = btype.clone().into();
-                        if btype != atype.clone().into() {
-                            return Err(Error {
-                                message: format!(
-                                    "Cant emit a compare for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                        let btype: Value = btype.clone().try_into()?;
+                        if btype != atype.clone().try_into()? {
+                            return Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "compare".to_string(),
+                                    a: a.clone(),
+                                    b: b.clone(),
+                                },
+                                pos: self.pos.clone(),
                             });
                         }
 
@@ -116,8 +122,8 @@ impl<'a> CompareExpression {
 
                         let result = br.builder.build_int_compare(
                             p,
-                            a.into_pointer_value(),
-                            b.into_pointer_value(),
+                            av.into_pointer_value(),
+                            bv.into_pointer_value(),
                             "compare",
                         );
 
@@ -145,12 +151,13 @@ impl<'a> CompareExpression {
                         },
                     ) => {
                         if asize != bsize || asign != bsign {
-                            return Err(Error {
-                                message: format!(
-                                    "Cant emit a compare for the types {} {}",
-                                    a_type, b_type
-                                ),
-                                pos: Some(self.pos.clone()),
+                            return Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "compare".to_string(),
+                                    a: a.clone(),
+                                    b: b.clone(),
+                                },
+                                pos: self.pos.clone(),
                             });
                         }
 
@@ -158,8 +165,8 @@ impl<'a> CompareExpression {
 
                         let result = br.builder.build_int_compare(
                             p,
-                            a.into_int_value(),
-                            b.into_int_value(),
+                            av.into_int_value(),
+                            bv.into_int_value(),
                             "compare",
                         );
 
@@ -177,17 +184,21 @@ impl<'a> CompareExpression {
                         }))
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit a compare for the types {} {}", a_type, b_type),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "compare".to_string(),
+                            a: a.clone(),
+                            b: b.clone(),
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
 
-            _ => Err(Error {
-                message: format!("Cant emit a compare for the vals {} {}", a, b),
-                pos: Some(self.pos.clone()),
-            }),
+            (a, b) => Ok(Some(Value::ConstBool(match p {
+                IntPredicate::EQ => a == b,
+                _ => todo!(),
+            }))),
         }
     }
 }
@@ -277,11 +288,11 @@ impl Parsable for CompareExpression {
 }
 
 impl<'a> Visitable<'a> for CompareExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             CompareExpressionChild::NotEql(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -291,15 +302,19 @@ impl<'a> Visitable<'a> for CompareExpression {
                         value: NodeV::Visited(Value::ConstInt(if a != b { 1 } else { 0 })),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant visit a or for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "not equals".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
             CompareExpressionChild::Eql(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -309,15 +324,19 @@ impl<'a> Visitable<'a> for CompareExpression {
                         value: NodeV::Visited(Value::ConstInt(if a == b { 1 } else { 0 })),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant visit a or for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "equals".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
             CompareExpressionChild::Greater(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -327,15 +346,19 @@ impl<'a> Visitable<'a> for CompareExpression {
                         value: NodeV::Visited(Value::ConstInt(if a > b { 1 } else { 0 })),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant visit a or for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "greater than".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
             CompareExpressionChild::Less(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -345,16 +368,20 @@ impl<'a> Visitable<'a> for CompareExpression {
                         value: NodeV::Visited(Value::ConstInt(if a < b { 1 } else { 0 })),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant visit a or for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "less than".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
             CompareExpressionChild::TermExpression(compare) => compare.visit(ctx),
         }
     }
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             CompareExpressionChild::NotEql(l, r) => {
                 let a = l.emit(ctx.clone())?.unwrap();

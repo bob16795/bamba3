@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -87,22 +88,22 @@ impl Parsable for UnaryExpression {
 }
 
 impl<'a> Visitable<'a> for UnaryExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
-            UnaryExpressionChild::Not(_un) => Err(Error {
-                message: format!("Todo: visit not expression"),
-                pos: Some(self.pos.clone()),
+            UnaryExpressionChild::Not(_un) => Err(Error::BambaError {
+                data: ErrorData::TodoError("visit not expression".to_string()),
+                pos: self.pos.clone(),
             }),
-            UnaryExpressionChild::Ref(_un) => Err(Error {
-                message: format!("Todo: visit ref expression"),
-                pos: Some(self.pos.clone()),
+            UnaryExpressionChild::Ref(_un) => Err(Error::BambaError {
+                data: ErrorData::TodoError("visit ref expression".to_string()),
+                pos: self.pos.clone(),
             }),
             UnaryExpressionChild::Deref(un) => {
                 let child = un.visit(ctx.clone())?;
                 child.borrow_mut().visit()?;
 
-                match &child.clone().into() {
-                    Value::Value { val, kind } => match kind.clone().into() {
+                match &child.clone().try_into()? {
+                    Value::Value { val, kind } => match kind.clone().try_into()? {
                         Value::PointerType(p) => {
                             let load = {
                                 let b = ctx.borrow();
@@ -114,11 +115,13 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                     AnyTypeEnum::IntType(a) => a.clone().into(),
                                     AnyTypeEnum::PointerType(a) => a.clone().into(),
                                     AnyTypeEnum::StructType(a) => a.clone().into(),
-                                    a => {
-                                        return Err(Error {
-                                            message: format!("cant deref type ptr {}", a),
-                                            pos: Some(self.pos.clone()),
-                                        })
+                                    _ => {
+                                        return Err(Error::BambaError {
+                                            data: ErrorData::DerefValueError {
+                                                kind: kind.clone().try_into()?,
+                                            },
+                                            pos: self.pos.clone(),
+                                        });
                                     }
                                 };
 
@@ -136,12 +139,10 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                 }),
                             })))
                         }
-                        p => {
-                            return Err(Error {
-                                message: format!("cant deref type {}", p),
-                                pos: Some(self.pos.clone()),
-                            })
-                        }
+                        v => Err(Error::BambaError {
+                            data: ErrorData::DerefValueError { kind: v },
+                            pos: self.pos.clone(),
+                        }),
                     },
                     Value::VoidType
                     | Value::IntType { size: _, signed: _ }
@@ -157,9 +158,9 @@ impl<'a> Visitable<'a> for UnaryExpression {
                         pos: self.pos.clone(),
                         value: NodeV::Visited(Value::PointerType(child.clone())),
                     }))),
-                    _ => Err(Error {
-                        message: format!("cant visit deref type {}", child.borrow()),
-                        pos: Some(self.pos.clone()),
+                    v => Err(Error::BambaError {
+                        data: ErrorData::PointerTypeError { kind: v.clone() },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -167,19 +168,19 @@ impl<'a> Visitable<'a> for UnaryExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             UnaryExpressionChild::Not(un) => {
                 let child = &un.emit(ctx.clone())?;
                 match child {
                     Some(val) => match val {
-                        Value::Value { val, kind } => match kind.clone().into() {
+                        Value::Value { val: vval, kind } => match kind.clone().try_into()? {
                             Value::IntType { size: _, signed: _ } => {
                                 let b = ctx.borrow();
 
                                 let load = b
                                     .builder
-                                    .build_not(val.into_int_value(), "bitnot")
+                                    .build_not(vval.into_int_value(), "bitnot")
                                     .unwrap()
                                     .into();
 
@@ -188,36 +189,42 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                     kind: kind.clone(),
                                 }))
                             }
-                            p => {
-                                return Err(Error {
-                                    message: format!("cant emit not type {}", p),
-                                    pos: Some(self.pos.clone()),
+                            _ => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::EmitUnaryOpError {
+                                        kind: "not".to_string(),
+                                        a: val.clone(),
+                                    },
+                                    pos: self.pos.clone(),
                                 })
                             }
                         },
-                        _ => Err(Error {
-                            message: format!("bad type {}", val),
-                            pos: Some(self.pos.clone()),
+                        _ => Err(Error::BambaError {
+                            data: ErrorData::EmitUnaryOpError {
+                                kind: "not".to_string(),
+                                a: val.clone(),
+                            },
+                            pos: self.pos.clone(),
                         }),
                     },
                     None => {
-                        return Err(Error {
-                            message: format!("Todo: emit ref expression"),
-                            pos: Some(self.pos.clone()),
+                        return Err(Error::BambaError {
+                            data: ErrorData::NoValueError,
+                            pos: self.pos.clone(),
                         })
                     }
                 }
             }
-            UnaryExpressionChild::Ref(_un) => Err(Error {
-                message: format!("Todo: emit ref expression"),
-                pos: Some(self.pos.clone()),
+            UnaryExpressionChild::Ref(_un) => Err(Error::BambaError {
+                data: ErrorData::TodoError("emit ref expression".to_string()),
+                pos: self.pos.clone(),
             }),
             UnaryExpressionChild::Deref(un) => {
                 let child = &un.emit(ctx.clone())?;
 
                 match child {
                     Some(val) => match val {
-                        Value::Value { val, kind } => match kind.clone().into() {
+                        Value::Value { val, kind } => match kind.clone().try_into()? {
                             Value::PointerType(p) => {
                                 let load = {
                                     let b = ctx.borrow();
@@ -229,11 +236,13 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                             AnyTypeEnum::IntType(a) => a.clone().into(),
                                             AnyTypeEnum::PointerType(a) => a.clone().into(),
                                             AnyTypeEnum::StructType(a) => a.clone().into(),
-                                            a => {
-                                                return Err(Error {
-                                                    message: format!("cant deref type ptr {}", a),
-                                                    pos: Some(self.pos.clone()),
-                                                })
+                                            _ => {
+                                                return Err(Error::BambaError {
+                                                    data: ErrorData::DerefValueError {
+                                                        kind: kind.clone().try_into()?,
+                                                    },
+                                                    pos: self.pos.clone(),
+                                                });
                                             }
                                         };
 
@@ -247,12 +256,10 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                     kind: p,
                                 }))
                             }
-                            p => {
-                                return Err(Error {
-                                    message: format!("cant deref type {}", p),
-                                    pos: Some(self.pos.clone()),
-                                })
-                            }
+                            v => Err(Error::BambaError {
+                                data: ErrorData::DerefValueError { kind: v },
+                                pos: self.pos.clone(),
+                            }),
                         },
                         Value::VoidType
                         | Value::IntType { size: _, signed: _ }
@@ -269,15 +276,15 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                 value: NodeV::Visited(val.clone()),
                             })))))
                         }
-                        _ => Err(Error {
-                            message: format!("bad type {}", val),
-                            pos: Some(self.pos.clone()),
+                        v => Err(Error::BambaError {
+                            data: ErrorData::PointerTypeError { kind: v.clone() },
+                            pos: self.pos.clone(),
                         }),
                     },
                     None => {
-                        return Err(Error {
-                            message: format!("Todo: emit ref expression"),
-                            pos: Some(self.pos.clone()),
+                        return Err(Error::BambaError {
+                            data: ErrorData::TodoError("emit ref expression".to_string()),
+                            pos: self.pos.clone(),
                         })
                     }
                 }

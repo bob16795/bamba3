@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
@@ -53,11 +54,11 @@ impl Parsable for AndExpression {
 }
 
 impl<'a> Visitable<'a> for AndExpression {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             AndExpressionChild::And(l, r) => {
-                let a: Value = l.visit(ctx.clone())?.into();
-                let b: Value = r.visit(ctx.clone())?.into();
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
@@ -67,9 +68,13 @@ impl<'a> Visitable<'a> for AndExpression {
                         value: NodeV::Visited(Value::ConstInt(a & b)),
                     }))),
 
-                    _ => Err(Error {
-                        message: format!("Cant visit a or for the types {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "and".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -77,7 +82,7 @@ impl<'a> Visitable<'a> for AndExpression {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             AndExpressionChild::And(l, r) => {
                 let a = l.emit(ctx.clone())?.unwrap();
@@ -87,16 +92,16 @@ impl<'a> Visitable<'a> for AndExpression {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a & b))),
                     (
                         Value::Value {
-                            val: a,
+                            val: av,
                             kind: a_type,
                         },
                         Value::Value {
-                            val: b,
+                            val: bv,
                             kind: b_type,
                         },
                     ) => {
-                        let a_type = a_type.into();
-                        let b_type = b_type.into();
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
 
                         match (&a_type, &b_type) {
                             (
@@ -110,20 +115,21 @@ impl<'a> Visitable<'a> for AndExpression {
                                 },
                             ) => {
                                 if asize != bsize || asign != bsign {
-                                    return Err(Error {
-                                        message: format!(
-                                            "Cant emit an not eql for the types {} {}",
-                                            a_type, b_type
-                                        ),
-                                        pos: Some(self.pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "and".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
                                     });
                                 }
 
                                 let br = ctx.borrow();
 
                                 let result = br.builder.build_and(
-                                    a.into_int_value(),
-                                    b.into_int_value(),
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
                                     "bitand",
                                 );
 
@@ -138,16 +144,23 @@ impl<'a> Visitable<'a> for AndExpression {
                                 }))
                             }
 
-                            (a, b) => Err(Error {
-                                message: format!("Cant emit a and for the types {} {}", a, b),
-                                pos: Some(self.pos.clone()),
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "and".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
                             }),
                         }
                     }
-
-                    _ => Err(Error {
-                        message: format!("Cant emit a and for the values {} {}", a, b),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "and".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }

@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::nodes::top_expression;
 use crate::parser::Parsable;
 use crate::position::FileRange;
@@ -45,7 +46,7 @@ impl Parsable for ReturnStatement {
 }
 
 impl<'a> Visitable<'a> for ReturnStatement {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match &self.expr {
             None => Ok(Rc::new(RefCell::new(Node {
                 pos: self.pos.clone(),
@@ -57,7 +58,7 @@ impl<'a> Visitable<'a> for ReturnStatement {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match &self.expr {
             None => {
                 let ctx_borrow = ctx.borrow();
@@ -84,10 +85,10 @@ impl<'a> Visitable<'a> for ReturnStatement {
 
                         Ok(None)
                     }
-                    _ => {
-                        return Err(Error {
-                            message: format!("Local value not return: '{:#?}'", out),
-                            pos: Some(self.pos.clone()),
+                    Some(kind) => {
+                        return Err(Error::BambaError {
+                            data: ErrorData::NoEmitReturnTypeError { kind },
+                            pos: self.pos.clone(),
                         });
                     }
                 }

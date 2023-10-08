@@ -1,10 +1,10 @@
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser::*;
 use crate::position::FileRange;
 use crate::scanner;
 use crate::visitable::*;
 use std::cell::RefCell;
-use std::fmt;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -108,7 +108,7 @@ impl Parsable for Statement {
 }
 
 impl<'a> Visitable<'a> for Statement {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
             StatementChild::Expression(ex) => ex.visit(ctx),
             StatementChild::Block(ex) => ex.visit(ctx),
@@ -134,7 +134,7 @@ impl<'a> Visitable<'a> for Statement {
         }
     }
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
             StatementChild::Expression(ex) => ex.emit(ctx),
             StatementChild::Block(ex) => ex.emit(ctx),

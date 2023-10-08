@@ -1,5 +1,6 @@
 extern crate llvm_sys as llvmk;
 
+use crate::errors::*;
 use crate::nodes::*;
 use crate::parser;
 use crate::position::{FileRange, Position};
@@ -17,10 +18,10 @@ use inkwell::values::*;
 use inkwell::AddressSpace;
 
 pub trait Visitable<'a> {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error>;
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>>;
 
-    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
-        Ok(Some(self.visit(ctx)?.into()))
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
+        Ok(Some(self.visit(ctx)?.try_into()?))
     }
 }
 
@@ -128,6 +129,7 @@ pub enum Value<'a> {
     },
     TypeType,
     ClassType,
+    ConstType,
     VoidType,
     FloatType,
     DoubleType,
@@ -157,9 +159,9 @@ impl<'a> PartialEq<Value<'a>> for Value<'a> {
             (Value::Class { .. }, Value::Class { .. }) => true,
             (Value::TypeType, Value::TypeType) => true,
             (Value::PointerType(a), Value::PointerType(b)) => {
-                let a: Value = a.clone().into();
+                let a: Value = a.clone().try_into().unwrap();
 
-                a == b.clone().into()
+                a == b.clone().try_into().unwrap()
             }
             (
                 Value::ArrayType {
@@ -171,9 +173,9 @@ impl<'a> PartialEq<Value<'a>> for Value<'a> {
                     size: bsize,
                 },
             ) => {
-                let a: Value = a.clone().into();
+                let a: Value = a.clone().try_into().unwrap();
 
-                a == b.clone().into() && asize == bsize
+                a == b.clone().try_into().unwrap() && asize == bsize
             }
             (
                 Value::IntType {
@@ -202,7 +204,7 @@ impl fmt::Display for Value<'_> {
                 kind: _,
                 input: _,
                 output: _,
-                conts: Some(conts),
+                conts: Some(_),
                 impls: _,
                 ctx: _,
                 name,
@@ -218,22 +220,52 @@ impl fmt::Display for Value<'_> {
             } => write!(f, "FuncType[]"),
             Value::Class {
                 kind: _,
-                children: _,
+                children,
                 name,
-            } => write!(f, "Class[{}]", name),
-            Value::Tuple { children: _ } => write!(f, "Tuple"),
+            } => write!(
+                f,
+                "Class[{}:\n  {}]",
+                name,
+                &children
+                    .borrow()
+                    .clone()
+                    .iter()
+                    .fold(String::new(), |acc, num| acc
+                        + "\n  "
+                        + &format!("{}: {}", &num.0, &num.1.borrow())
+                            .to_string()
+                            .replace("\n", "\n  "))[3..],
+            ),
+            Value::Tuple { children } => {
+                write!(
+                    f,
+                    "Tuple[{}: {}]",
+                    children.len(),
+                    &children.clone().iter().fold(String::new(), |acc, num| acc
+                        + ", "
+                        + &format!("{}", &num.borrow()).to_string())[2..],
+                )
+            }
 
             Value::BuiltinFunc(v) => write!(f, "{:?}", v),
             Value::PointerType(v) => write!(f, "TPtr[{}]", v.borrow()),
             Value::ArrayType { size, child } => write!(f, "TArray[{:?};{}]", size, child.borrow()),
             Value::IntType { size, signed } => write!(f, "TInt{}{}", size, signed),
             Value::ClassType => write!(f, "TClass"),
+            Value::ConstType => write!(f, "TConst"),
             Value::TypeType => write!(f, "TType"),
             Value::VoidType => write!(f, "TVoid"),
             Value::FloatType => write!(f, "TFloat"),
             Value::DoubleType => write!(f, "TDouble"),
-            Value::Value { val, kind: _ } => write!(f, "val[{:?}]", val),
-            Value::Prop { id, kind: _ } => write!(f, "prop of @{:?}", id),
+            Value::Value { val, kind } => {
+                write!(
+                    f,
+                    "val[{} of {}]",
+                    val,
+                    <Rc<RefCell<Node<'_>>> as TryInto<Value>>::try_into(kind.clone()).unwrap()
+                )
+            }
+            Value::Prop { id, kind: _ } => write!(f, "prop@{:?}", id),
             Value::Method { func: _, parent: _ } => write!(f, "method"),
         }
     }
@@ -243,7 +275,8 @@ impl<'a> Value<'a> {
     pub fn get_type(
         &mut self,
         ctx: Rc<RefCell<NodeContext<'a>>>,
-    ) -> Result<Box<AnyTypeEnum<'a>>, Error> {
+        pos: FileRange,
+    ) -> Result<Box<AnyTypeEnum<'a>>, Error<'a>> {
         match &self {
             Value::Function { output, input, .. } => {
                 let out: Option<BasicTypeEnum> =
@@ -380,8 +413,11 @@ impl<'a> Value<'a> {
                     };
 
                     match child_v {
-                        Value::Prop { id, kind } => {
-                            let kind = kind.borrow_mut().get_type()?.as_ref().clone();
+                        Value::Prop {
+                            id,
+                            kind: base_kind,
+                        } => {
+                            let kind = base_kind.borrow_mut().get_type()?.as_ref().clone();
 
                             let id = id.borrow().clone();
 
@@ -402,9 +438,11 @@ impl<'a> Value<'a> {
                                     props.push((id, kind.as_basic_type_enum()))
                                 }
                                 _ => {
-                                    return Err(Error {
-                                        message: format!("invalid prop type: {}", kind),
-                                        pos: None,
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::InvalidPropError {
+                                            kind: base_kind.clone().try_into()?,
+                                        },
+                                        pos: pos.clone(),
                                     })
                                 }
                             }
@@ -445,11 +483,9 @@ impl<'a> Value<'a> {
                     }
                 }
             }
-            v => todo!("{}", v),
-
-            _ => Err(Error {
-                message: format!("type not found for node '{}'", self),
-                pos: None,
+            _ => Err(Error::BambaError {
+                data: ErrorData::ValueTypeError { kind: self.clone() },
+                pos: pos.clone(),
             }),
         }
     }
@@ -459,11 +495,16 @@ impl<'a> Value<'a> {
         child: String,
         ctx: Rc<RefCell<NodeContext<'a>>>,
         pos: FileRange,
-    ) -> Result<Value<'a>, Error> {
+    ) -> Result<Value<'a>, Error<'a>> {
         match child.as_str() {
             "SIZE" => {
                 return Ok(Value::Value {
-                    val: Rc::new(self.get_type(ctx.clone())?.size_of().unwrap().into()),
+                    val: Rc::new(
+                        self.get_type(ctx.clone(), pos.clone())?
+                            .size_of()
+                            .unwrap()
+                            .into(),
+                    ),
                     kind: Rc::new(RefCell::new(Node {
                         ctx: ctx.clone(),
                         pos: pos.clone(),
@@ -474,15 +515,60 @@ impl<'a> Value<'a> {
                     })),
                 });
             }
-            "TYPE" => match self {
+            "TYPE" => match self.clone() {
                 Value::Value { kind, .. } => {
-                    return Ok(kind.clone().into());
+                    return Ok(kind.clone().try_into()?);
                 }
-                _ => {
-                    return Err(Error {
-                        message: format!("Value has no Type"),
-                        pos: Some(pos.clone()),
+                Value::Class { .. } => {
+                    return Ok(Value::ClassType);
+                }
+                Value::Tuple { .. } => {
+                    return Err(Error::BambaError {
+                        data: ErrorData::TodoError("tuple type".to_string()),
+                        pos: pos.clone(),
                     })
+                }
+                Value::Method { func, .. } => return Ok(func.try_into()?),
+                Value::Function {
+                    ctx,
+                    impls,
+                    input,
+                    kind,
+                    name,
+                    output,
+                    ..
+                } => {
+                    return Ok(Value::Function {
+                        conts: None,
+                        ctx,
+                        impls,
+                        input,
+                        kind,
+                        name,
+                        output,
+                    });
+                }
+                Value::Prop { kind, .. } => {
+                    return Ok(kind.try_into()?);
+                }
+                Value::TypeType
+                | Value::FloatType
+                | Value::ClassType
+                | Value::ConstType
+                | Value::VoidType
+                | Value::DoubleType
+                | Value::IntType { .. }
+                | Value::ArrayType { .. }
+                | Value::PointerType(_) => {
+                    return Ok(Value::TypeType);
+                }
+                Value::ConstNull
+                | Value::ConstBool(_)
+                | Value::ConstString(_)
+                | Value::ConstInt(_)
+                | Value::BuiltinFunc(_)
+                | Value::ConstReal(_) => {
+                    return Ok(Value::ConstType);
                 }
             },
             _ => {}
@@ -502,42 +588,43 @@ impl<'a> Value<'a> {
                         let res = node.clone();
                         drop(children);
 
-                        Ok(res.into())
+                        Ok(res.try_into()?)
                     }
-                    None => Err(Error {
-                        message: format!("child not found for class node '{}'", child),
-                        pos: Some(pos.clone()),
-                    }),
+                    None => {
+                        return Err(Error::BambaError {
+                            data: ErrorData::NoChildError {
+                                child: child.clone(),
+                                parent: self.clone(),
+                            },
+                            pos: pos.clone(),
+                        });
+                    }
                 }
             }
             Value::Value { val, kind } => {
                 kind.borrow_mut().visit()?;
 
-                match kind.clone().into() {
-                    Value::PointerType(c) => match c.clone().into() {
-                        Value::Class {
-                            children,
-                            name,
-                            kind: _,
-                        } => {
+                match kind.clone().try_into()? {
+                    Value::PointerType(c) => match c.clone().try_into()? {
+                        Value::Class { children, .. } => {
                             let children = {
                                 let children = children.borrow();
                                 let children = children.get(&child);
 
                                 if children.is_none() {
-                                    return Err(Error {
-                                        message: format!(
-                                            "child not found for node '{}' in class",
-                                            child
-                                        ),
-                                        pos: Some(pos.clone()),
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::NoChildError {
+                                            child: child.clone(),
+                                            parent: self.clone(),
+                                        },
+                                        pos: pos.clone(),
                                     });
                                 }
 
                                 children.unwrap().clone()
                             };
 
-                            if let Value::Function { .. } = children.clone().into() {
+                            if let Value::Function { .. } = children.clone().try_into()? {
                                 return Ok(Value::Method {
                                     func: children.clone().into(),
                                     parent: Rc::new(RefCell::new(Node {
@@ -551,16 +638,14 @@ impl<'a> Value<'a> {
                             let Value::Prop {
                                 id,
                                 kind: prop_kind,
-                            } = children.clone().into()
+                            } = children.clone().try_into()?
                             else {
-                                return Err(Error {
-                                    message: format!(
-                                        "child not found for node '{}' in class '{}', children: {}",
-                                        child,
-                                        name,
-                                        children.borrow()
-                                    ),
-                                    pos: Some(pos.clone()),
+                                return Err(Error::BambaError {
+                                    data: ErrorData::NoChildError {
+                                        child: child.clone(),
+                                        parent: self.clone(),
+                                    },
+                                    pos: pos.clone(),
                                 });
                             };
                             let bctx = ctx.borrow();
@@ -588,29 +673,34 @@ impl<'a> Value<'a> {
                                 })),
                             })
                         }
-                        _ => Err(Error {
-                            message: format!(
-                                "child not found for node '{}' in {}",
-                                child,
-                                c.borrow()
-                            ),
-                            pos: None,
+                        _ => Err(Error::BambaError {
+                            data: ErrorData::NoChildError {
+                                child: child.clone(),
+                                parent: self.clone(),
+                            },
+                            pos: pos.clone(),
                         }),
                     },
-                    _ => Err(Error {
-                        message: format!("child not found for node '{}'", child),
-                        pos: None,
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::NoChildError {
+                            child: child.clone(),
+                            parent: self.clone(),
+                        },
+                        pos: pos.clone(),
                     }),
                 }
             }
-            _ => Err(Error {
-                message: format!("child '{}' not found for node '{}'", child, self),
-                pos: None,
+            _ => Err(Error::BambaError {
+                data: ErrorData::NoChildError {
+                    child: child.clone(),
+                    parent: self.clone(),
+                },
+                pos: pos.clone(),
             }),
         }
     }
 
-    pub fn get_name(&self) -> Result<String, Error> {
+    pub fn get_name(&self) -> Result<String, Error<'a>> {
         match self {
             Value::Function {
                 kind: _,
@@ -628,14 +718,11 @@ impl<'a> Value<'a> {
                 children: _,
             } => Ok(name.clone()),
             Value::IntType { size, signed: _ } => Ok(format!("i{}", size)),
-            _ => Err(Error {
-                message: format!("cant get type name"),
-                pos: None,
-            }),
+            _ => Ok("Anon".to_string()),
         }
     }
 
-    pub fn set_name(&mut self, new_name: String) -> Result<(), Error> {
+    pub fn set_name(&mut self, new_name: String) -> Result<(), Error<'a>> {
         match self {
             Value::Function {
                 kind: _,
@@ -667,7 +754,7 @@ impl<'a> Value<'a> {
         }
     }
 
-    fn emit(&mut self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&mut self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self {
             Value::Function {
                 kind,
@@ -691,7 +778,7 @@ impl<'a> Value<'a> {
                         Some(t) => {
                             let tv = t.clone();
                             let tv = &mut tv.borrow_mut();
-                            match (&mut tv.clone()).into() {
+                            match (&mut tv.clone()).try_into()? {
                                 Value::TypeType => {
                                     impl_name.extend(param.name.chars());
                                 }
@@ -705,12 +792,11 @@ impl<'a> Value<'a> {
                                         AnyTypeEnum::FloatType(ret) => args.push((*ret).into()),
                                         AnyTypeEnum::ArrayType(ret) => args.push((*ret).into()),
                                         _ => {
-                                            return Err(Error {
-                                                message: format!(
-                                                    "Couldnt convert type {} to argument",
-                                                    arg
-                                                ),
-                                                pos: None,
+                                            return Err(Error::BambaError {
+                                                data: ErrorData::ParamTypeError {
+                                                    kind: output.clone().try_into()?,
+                                                },
+                                                pos: output.borrow().pos.clone(),
                                             })
                                         }
                                     };
@@ -734,9 +820,11 @@ impl<'a> Value<'a> {
                     AnyTypeEnum::ArrayType(ret) => ret.fn_type(&args, false),
                     AnyTypeEnum::FloatType(ret) => ret.fn_type(&args, false),
                     _ => {
-                        return Err(Error {
-                            message: format!("cant turn {} into return type", ret),
-                            pos: Some(output.borrow().pos.clone()),
+                        return Err(Error::BambaError {
+                            data: ErrorData::ReturnTypeError {
+                                kind: output.clone().try_into()?,
+                            },
+                            pos: output.borrow().pos.clone(),
                         })
                     }
                 };
@@ -881,30 +969,22 @@ impl<'a> Value<'a> {
     }
 }
 
-impl<'a> From<&mut Node<'a>> for Value<'a> {
-    fn from(other: &mut Node<'a>) -> Self {
-        let t = other.visit();
+impl<'a> TryFrom<&mut Node<'a>> for Value<'a> {
+    type Error = Error<'a>;
 
-        match t {
-            Ok(()) => {}
-            Err(e) => {
-                let e: String = e.into();
-                println!("{}", e);
-
-                todo!("quit");
-            }
-        }
+    fn try_from(other: &mut Node<'a>) -> Result<Self, Error<'a>> {
+        other.visit()?;
 
         match &other.value {
-            NodeV::Visited(v) => v.clone(),
-            NodeV::Emited(v, _) => v.clone(),
+            NodeV::Visited(v) => Ok(v.clone()),
+            NodeV::Emited(v, _) => Ok(v.clone()),
             _ => {
-                let e: String = Error {
-                    message: "".to_string(),
-                    pos: Some(other.pos.clone()),
-                }
-                .into();
-                println!("{}", e);
+                //let e: String = Error {
+                //    message: "".to_string(),
+                //    pos: Some(other.pos.clone()),
+                //}
+                //.into();
+                //println!("{}", e);
 
                 todo!("quit");
             }
@@ -912,10 +992,12 @@ impl<'a> From<&mut Node<'a>> for Value<'a> {
     }
 }
 
-impl<'a> From<Rc<RefCell<Node<'a>>>> for Value<'a> {
-    fn from(other: Rc<RefCell<Node<'a>>>) -> Self {
+impl<'a> TryFrom<Rc<RefCell<Node<'a>>>> for Value<'a> {
+    type Error = Error<'a>;
+
+    fn try_from(other: Rc<RefCell<Node<'a>>>) -> Result<Self, Error> {
         let a: &mut Node<'a> = &mut other.borrow_mut();
-        return a.into();
+        a.try_into()
     }
 }
 
@@ -957,8 +1039,8 @@ impl fmt::Display for Node<'_> {
 }
 
 impl<'a> Node<'a> {
-    pub fn regen(&mut self, new_name: String) -> Result<(), Error> {
-        match self.into() {
+    pub fn regen(&mut self, new_name: String) -> Result<(), Error<'a>> {
+        match self.try_into()? {
             Value::Class { kind, children, .. } => {
                 let mut new_idx = 0;
 
@@ -1007,8 +1089,11 @@ impl<'a> Node<'a> {
                     };
 
                     match child_v {
-                        Value::Prop { id, kind } => {
-                            let kind = kind.borrow_mut().get_type()?.as_ref().clone();
+                        Value::Prop {
+                            id,
+                            kind: base_kind,
+                        } => {
+                            let kind = base_kind.borrow_mut().get_type()?.as_ref().clone();
 
                             let id: &mut usize = &mut id.borrow_mut();
 
@@ -1033,9 +1118,11 @@ impl<'a> Node<'a> {
                                     props.push((*id, kind.as_basic_type_enum()))
                                 }
                                 _ => {
-                                    return Err(Error {
-                                        message: format!("invalid prop type: {}", kind),
-                                        pos: None,
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::InvalidPropError {
+                                            kind: base_kind.clone().try_into()?,
+                                        },
+                                        pos: self.pos.clone(),
                                     })
                                 }
                             }
@@ -1060,18 +1147,18 @@ impl<'a> Node<'a> {
         }
     }
 
-    pub fn set_name(&mut self, new_name: String) -> Result<(), Error> {
+    pub fn set_name(&mut self, new_name: String) -> Result<(), Error<'a>> {
         match &mut self.value {
             NodeV::Visited(v) => v.set_name(new_name),
-            _ => Err(Error {
-                message: format!("Cant set name of unvisited node"),
-                pos: Some(self.pos.clone()),
+            _ => Err(Error::BambaError {
+                data: ErrorData::NameUnvisitedError,
+                pos: self.pos.clone(),
             }),
         }
     }
 
-    pub fn emit_call(&mut self, params: &mut Vec<Value<'a>>) -> Result<Value<'a>, Error> {
-        match &self.into() {
+    pub fn emit_call(&mut self, params: &mut Vec<Value<'a>>) -> Result<Value<'a>, Error<'a>> {
+        match &self.try_into()? {
             Value::Function {
                 conts: _,
                 kind: _,
@@ -1095,10 +1182,10 @@ impl<'a> Node<'a> {
                             BasicValueEnum::StructValue(arr) => p.push(arr.clone().into()),
                             BasicValueEnum::FloatValue(arr) => p.push(arr.clone().into()),
                             _ => {
-                                return Err(Error {
-                                    message: format!("cant convert type to param {}", val),
-                                    pos: Some(self.pos.clone()),
-                                })
+                                return Err(Error::BambaError {
+                                    data: ErrorData::NoValueError,
+                                    pos: self.pos.clone(),
+                                });
                             }
                         },
                         _ => {}
@@ -1128,14 +1215,54 @@ impl<'a> Node<'a> {
                         }
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit call: {}", self),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::NoValueError,
+                        pos: self.pos.clone(),
                     }),
                 }
             }
+            Value::Class { .. } => match params[0].emit(self.ctx.clone())? {
+                Some(Value::Tuple { children }) => {
+                    let mut vals = Vec::new();
+
+                    // TODO: check assignable
+
+                    for c in children {
+                        let Value::Value { val: c, kind: _ } = c.borrow().clone() else {
+                            return Err(Error::BambaError {
+                                data: ErrorData::NoValueError,
+                                pos: self.pos.clone(),
+                            });
+                        };
+
+                        vals.push(c.as_ref().clone());
+                    }
+
+                    let br = self.ctx.borrow();
+
+                    let val = br.context.const_struct(&vals, false);
+
+                    Ok(Value::Value {
+                        val: val.as_basic_value_enum().into(),
+                        kind: Rc::new(RefCell::new(self.clone())),
+                    })
+                }
+                None => {
+                    return Err(Error::BambaError {
+                        data: ErrorData::NoValueError,
+                        pos: self.pos.clone(),
+                    });
+                }
+                _ => Err(Error::BambaError {
+                    data: ErrorData::CastError {
+                        value: params[0].clone(),
+                        kind: self.try_into()?,
+                    },
+                    pos: self.pos.clone(),
+                }),
+            },
             Value::Method { func, parent } => {
-                let mut new_params: Vec<Value> = vec![parent.clone().into()];
+                let mut new_params: Vec<Value> = vec![parent.clone().try_into()?];
                 new_params.extend(params.clone());
 
                 return func.borrow_mut().emit_call(&mut new_params);
@@ -1158,7 +1285,8 @@ impl<'a> Node<'a> {
                     kind: Rc::new(RefCell::new(self.clone())),
                 }),
                 Some(Value::Value { val, .. }) => {
-                    let ctxb = self.ctx.borrow();
+                    let ctxb = self.ctx.clone();
+                    let ctxb = ctxb.borrow();
                     match val.as_ref() {
                         BasicValueEnum::IntValue(i) => Ok(Value::Value {
                             val: Rc::new(
@@ -1182,15 +1310,24 @@ impl<'a> Node<'a> {
                             ),
                             kind: Rc::new(RefCell::new(self.clone())),
                         }),
-                        _ => Err(Error {
-                            message: format!("Cant cast: {} to double", self),
-                            pos: Some(self.pos.clone()),
-                        }),
+                        _ => {
+                            let val: Value = self.try_into()?;
+                            Err(Error::BambaError {
+                                data: ErrorData::CastError {
+                                    value: params[0].clone(),
+                                    kind: val.clone(),
+                                },
+                                pos: self.pos.clone(),
+                            })
+                        }
                     }
                 }
-                _ => Err(Error {
-                    message: format!("Cant cast: {} to double", self),
-                    pos: Some(self.pos.clone()),
+                _ => Err(Error::BambaError {
+                    data: ErrorData::CastError {
+                        value: params[0].clone(),
+                        kind: self.try_into()?,
+                    },
+                    pos: self.pos.clone(),
                 }),
             },
             Value::IntType { size: _, signed } => {
@@ -1264,11 +1401,14 @@ impl<'a> Node<'a> {
                                     .unwrap()
                             }
 
-                            val => {
-                                return Err(Error {
-                                    message: format!("Cant emit cast: {} into {} a", val, self),
-                                    pos: Some(self.pos.clone()),
-                                })
+                            _ => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::CastError {
+                                        value: params[0].clone(),
+                                        kind: self.try_into()?,
+                                    },
+                                    pos: self.pos.clone(),
+                                });
                             }
                         };
                         Ok(Value::Value {
@@ -1277,9 +1417,12 @@ impl<'a> Node<'a> {
                         })
                     }
 
-                    _ => Err(Error {
-                        message: format!("Cant emit cast: {} into {} b", val.unwrap(), self),
-                        pos: Some(self.pos.clone()),
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::CastError {
+                            value: params[0].clone(),
+                            kind: self.try_into()?,
+                        },
+                        pos: self.pos.clone(),
                     }),
                 }
             }
@@ -1296,9 +1439,12 @@ impl<'a> Node<'a> {
                                 kind: Rc::new(RefCell::new(self.clone())),
                             })
                         }
-                        _ => Err(Error {
-                            message: format!("Cant emit cast: {} into {}", params[0], self),
-                            pos: Some(self.pos.clone()),
+                        _ => Err(Error::BambaError {
+                            data: ErrorData::CastError {
+                                value: params[0].clone(),
+                                kind: self.try_into()?,
+                            },
+                            pos: self.pos.clone(),
                         }),
                     }
                 }
@@ -1316,9 +1462,11 @@ impl<'a> Node<'a> {
                         kind: Rc::new(RefCell::new(self.clone())),
                     })
                 }
-                _ => Err(Error {
-                    message: format!("Cant emit cast: {} into {}", params[0], self),
-                    pos: Some(self.pos.clone()),
+                _ => Err(Error::BambaError {
+                    data: ErrorData::NoNullError {
+                        kind: self.try_into()?,
+                    },
+                    pos: self.pos.clone(),
                 }),
             },
 
@@ -1326,10 +1474,12 @@ impl<'a> Node<'a> {
                 let cl = self.clone();
                 let b = cl.ctx.borrow();
 
-                let Value::PointerType(kind) = kind.clone().into() else {
-                    return Err(Error {
-                        message: format!("Cant emit ptr call: {}", self),
-                        pos: Some(self.pos.clone()),
+                let Value::PointerType(kind) = kind.clone().try_into()? else {
+                    return Err(Error::BambaError {
+                        data: ErrorData::PtrCallError {
+                            value: kind.clone().try_into()?,
+                        },
+                        pos: self.pos.clone(),
                     });
                 };
 
@@ -1338,9 +1488,11 @@ impl<'a> Node<'a> {
                 for p in params {
                     let p: Value = p.clone().into();
                     let Value::Value { val: p, kind: _ } = p else {
-                        return Err(Error {
-                            message: format!("Cant emit ptr call: {}", self),
-                            pos: Some(self.pos.clone()),
+                        return Err(Error::BambaError {
+                            data: ErrorData::PtrCallError {
+                                value: kind.try_into()?,
+                            },
+                            pos: self.pos.clone(),
                         });
                     };
                     new.push(p.as_ref().clone().into())
@@ -1359,10 +1511,12 @@ impl<'a> Node<'a> {
 
                 let result = result.as_ref().unwrap();
 
-                let Value::Function { output, .. }: Value = kind.clone().into() else {
-                    return Err(Error {
-                        message: format!("Cant emit ptr call: {}", self),
-                        pos: Some(self.pos.clone()),
+                let Value::Function { output, .. }: Value = kind.clone().try_into()? else {
+                    return Err(Error::BambaError {
+                        data: ErrorData::PtrCallError {
+                            value: kind.try_into()?,
+                        },
+                        pos: self.pos.clone(),
                     });
                 };
 
@@ -1375,25 +1529,28 @@ impl<'a> Node<'a> {
                 }
             }
 
-            _ => Err(Error {
-                message: format!("Cant emit cast: {} into {} final", params[0], self),
-                pos: Some(self.pos.clone()),
+            _ => Err(Error::BambaError {
+                data: ErrorData::CastError {
+                    value: params[0].clone(),
+                    kind: self.try_into()?,
+                },
+                pos: self.pos.clone(),
             }),
         }
     }
 
-    pub fn get_type(&mut self) -> Result<Box<AnyTypeEnum<'a>>, Error> {
+    pub fn get_type(&mut self) -> Result<Box<AnyTypeEnum<'a>>, Error<'a>> {
         self.visit()?;
 
-        let v: &mut Value = &mut self.into();
+        let v: &mut Value = &mut self.try_into()?;
 
-        v.get_type(self.ctx.clone())
+        v.get_type(self.ctx.clone(), self.pos.clone())
     }
 
-    pub fn get_child(&mut self, child: String) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    pub fn get_child(&mut self, child: String) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         self.visit()?;
 
-        let v: &mut Value = &mut self.into();
+        let v: &mut Value = &mut self.try_into()?;
 
         Ok(Rc::new(RefCell::new(Node {
             ctx: self.ctx.clone(),
@@ -1405,8 +1562,8 @@ impl<'a> Node<'a> {
     pub fn call(
         &mut self,
         params: Vec<Rc<RefCell<Node<'a>>>>,
-    ) -> Result<Rc<RefCell<Node<'a>>>, Error> {
-        match &self.into() {
+    ) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
+        match &self.try_into()? {
             Value::Function {
                 conts,
                 kind: _,
@@ -1438,7 +1595,7 @@ impl<'a> Node<'a> {
                 let mut new = Vec::new();
 
                 for p in params {
-                    new.push(p.into());
+                    new.push(p.try_into()?);
                 }
 
                 let v = self.emit_call(&mut new)?;
@@ -1452,8 +1609,11 @@ impl<'a> Node<'a> {
         }
     }
 
-    pub fn get_impl(&mut self, params: Option<&[Value<'a>]>) -> Result<FunctionImpl<'a>, Error> {
-        let val: &mut Value = &mut self.into();
+    pub fn get_impl(
+        &mut self,
+        params: Option<&[Value<'a>]>,
+    ) -> Result<FunctionImpl<'a>, Error<'a>> {
+        let val: &mut Value = &mut self.try_into()?;
         let mut name = format!("");
         let mut args: Vec<BasicMetadataTypeEnum<'a>> = Vec::new();
 
@@ -1497,7 +1657,7 @@ impl<'a> Node<'a> {
                     let val = input.val.clone();
                     match val {
                         Some(val) => {
-                            let v: Value = val.clone().into();
+                            let v: Value = val.clone().try_into()?;
                             if v == Value::TypeType {
                                 add = true;
                             } else {
@@ -1541,8 +1701,8 @@ impl<'a> Node<'a> {
         match implementation {
             Some(v) => Ok(v.clone()),
             None => {
-                let ret = &mut output.borrow_mut().clone();
-                let ret = ret.get_type()?;
+                let kind = &mut output.borrow_mut().clone();
+                let ret = kind.get_type()?;
 
                 let ty = match &ret.as_ref() {
                     AnyTypeEnum::VoidType(ret) => ret.fn_type(&args, false),
@@ -1552,9 +1712,11 @@ impl<'a> Node<'a> {
                     AnyTypeEnum::ArrayType(ret) => ret.fn_type(&args, false),
                     AnyTypeEnum::FloatType(ret) => ret.fn_type(&args, false),
                     _ => {
-                        return Err(Error {
-                            message: format!("cant turn {} into return type", ret),
-                            pos: Some(output.borrow().pos.clone()),
+                        return Err(Error::BambaError {
+                            data: ErrorData::ReturnTypeError {
+                                kind: kind.try_into()?,
+                            },
+                            pos: output.borrow().pos.clone(),
                         })
                     }
                 };
@@ -1585,7 +1747,7 @@ impl<'a> Node<'a> {
                             None => None,
                         };
 
-                        let v: Value = input.val.clone().unwrap().into();
+                        let v: Value = input.val.clone().unwrap().try_into()?;
                         if v != Value::TypeType && input.val.clone().is_some() {
                             match p {
                                 Some(Value::Value { .. }) | None => {
@@ -1643,7 +1805,7 @@ impl<'a> Node<'a> {
 }
 
 impl<'a> Node<'a> {
-    pub fn emit(&mut self) -> Result<Option<Value<'a>>, Error> {
+    pub fn emit(&mut self) -> Result<Option<Value<'a>>, Error<'a>> {
         match &mut self.value {
             NodeV::Unvisited(_name, _e) => {
                 self.visit()?;
@@ -1665,7 +1827,7 @@ impl<'a> Node<'a> {
         }
     }
 
-    pub fn visit(&mut self) -> Result<(), Error> {
+    pub fn visit(&mut self) -> Result<(), Error<'a>> {
         match &self.value.clone() {
             NodeV::Unvisited(name, e) => {
                 let res = e.visit(self.ctx.clone())?;
@@ -1677,21 +1839,6 @@ impl<'a> Node<'a> {
             }
             NodeV::Visited(_) => Ok(()),
             NodeV::Emited(_, _) => Ok(()),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Error {
-    pub message: String,
-    pub pos: Option<FileRange>,
-}
-
-impl From<Error> for String {
-    fn from(err: Error) -> Self {
-        match err.pos {
-            Some(pos) => format!("{} - {}", err.message, pos),
-            None => err.message,
         }
     }
 }
@@ -1712,7 +1859,15 @@ pub fn builtin_type<'a>(
         "Self" => {
             return Some(Rc::new(RefCell::new(Node {
                 pos: pos.clone(),
-                value: NodeV::Visited(ctx.clone().borrow().self_value.clone().unwrap().into()),
+                value: NodeV::Visited(
+                    ctx.clone()
+                        .borrow()
+                        .self_value
+                        .clone()
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                ),
                 ctx,
             })));
         }
@@ -1854,7 +2009,7 @@ pub fn builtin_type<'a>(
 }
 
 impl<'a> Visitable<'a> for parser::File {
-    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error> {
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let mut to_visit = Vec::new();
 
         for def in &self.defs {
@@ -1899,7 +2054,7 @@ impl<'a> Visitable<'a> for parser::File {
         })))
     }
 
-    fn emit(&self, _: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error> {
+    fn emit(&self, _: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         todo!("emit file");
     }
 }
