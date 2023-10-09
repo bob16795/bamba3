@@ -6,11 +6,20 @@ force def main: fn[] -> i32 {
     
     s.append("World!");
 
-    String.println(s);
-
-    if (class {def a: i32; def b: 100;}.a == i32) {
+    if (!Bool(class {def a: i32; def b: 100;}.a == i32)) {
+        String.println(s);
         return i32(1);
     } else {
+        def lol: new i32 = i32(1); 
+
+        while (*lol < i32(100)) {
+            String.println(s);
+
+            lol = *lol + i32(1);
+        }
+
         return i32(0);
     }
+
+    return i32(0);
 };

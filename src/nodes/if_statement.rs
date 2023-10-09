@@ -143,6 +143,8 @@ impl<'a> Visitable<'a> for IfStatement {
 
                 match &val.as_ref() {
                     BasicValueEnum::IntValue(i) => {
+                        let body_ret: bool;
+
                         {
                             let context = &ctx.borrow();
                             let v = context
@@ -166,8 +168,13 @@ impl<'a> Visitable<'a> for IfStatement {
 
                         {
                             let context = &ctx.borrow();
+                            body_ret = *context.returned.clone().unwrap().borrow();
 
-                            _ = context.builder.build_unconditional_branch(merge_bb);
+                            *context.returned.clone().unwrap().borrow_mut() = false;
+
+                            if !body_ret {
+                                _ = context.builder.build_unconditional_branch(merge_bb);
+                            }
 
                             context.builder.position_at_end(else_bb);
                         }
@@ -179,9 +186,15 @@ impl<'a> Visitable<'a> for IfStatement {
                         {
                             let context = &ctx.borrow();
 
-                            _ = context.builder.build_unconditional_branch(merge_bb);
+                            let else_ret = *context.returned.clone().unwrap().borrow();
+
+                            if !else_ret {
+                                _ = context.builder.build_unconditional_branch(merge_bb);
+                            }
 
                             context.builder.position_at_end(merge_bb);
+
+                            *context.returned.clone().unwrap().borrow_mut() = else_ret && body_ret;
                         }
 
                         Ok(None)

@@ -20,6 +20,7 @@ pub enum PrimaryExpressionChild {
     New(new_expression::NewExpression),
     Dollar(dollar_expression::DollarExpression),
     Comptime(ComptimeExpression),
+    Emit(EmitExpression),
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +109,13 @@ impl Parsable for PrimaryExpression {
             });
         }
 
+        let parsed = EmitExpression::parse(scn);
+        if parsed.is_some() {
+            return Some(PrimaryExpression {
+                child: Box::new(PrimaryExpressionChild::Emit(parsed.unwrap())),
+            });
+        }
+
         (scn.slice, scn.pos) = start;
         None
     }
@@ -116,6 +124,11 @@ impl Parsable for PrimaryExpression {
 impl<'a> Visitable<'a> for PrimaryExpression {
     fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
+            PrimaryExpressionChild::Emit(i) => Ok(Rc::new(RefCell::new(Node {
+                value: NodeV::Visited(i.expr.emit(ctx.clone())?.unwrap_or(Value::VoidType)),
+                pos: i.pos.clone(),
+                ctx,
+            }))),
             PrimaryExpressionChild::Comptime(i) => i.expr.visit(ctx.clone()),
             PrimaryExpressionChild::Ident(i) => i.visit(ctx),
             PrimaryExpressionChild::Function(i) => i.visit(ctx),
@@ -123,8 +136,8 @@ impl<'a> Visitable<'a> for PrimaryExpression {
             PrimaryExpressionChild::ConstInt(i) => {
                 let val = i.value;
                 Ok(Rc::new(RefCell::new(Node {
-                    pos: i.pos.clone(),
                     value: NodeV::Visited(Value::ConstInt(val)),
+                    pos: i.pos.clone(),
                     ctx,
                 })))
             }
@@ -223,6 +236,7 @@ impl<'a> Visitable<'a> for PrimaryExpression {
             PrimaryExpressionChild::Comptime(i) => Ok(Some(i.expr.visit(ctx.clone())?.try_into()?)),
             PrimaryExpressionChild::Dollar(i) => i.emit(ctx),
             PrimaryExpressionChild::Class(_) => Ok(Some(self.visit(ctx.clone())?.try_into()?)),
+            PrimaryExpressionChild::Emit(i) => i.expr.emit(ctx),
             v => todo!("{:?}", v),
         }
     }

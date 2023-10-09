@@ -58,6 +58,8 @@ pub enum ErrorData<'a> {
     NameUnvisitedError,
     #[error("Cant create prop of type {kind}")]
     InvalidPropError { kind: Value<'a> },
+    #[error("Code after return statement")]
+    CodeAfterReturnError,
 
     #[error("{0} not yet implemented")]
     TodoError(String),
@@ -65,6 +67,6 @@ pub enum ErrorData<'a> {
 
 #[derive(Error, Debug)]
 pub enum Error<'a> {
-    #[error("{data} @ {pos}")]
+    #[error("Error: {data}\n{pos}")]
     BambaError { pos: FileRange, data: ErrorData<'a> },
 }

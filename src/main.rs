@@ -62,6 +62,7 @@ fn main() -> Result<(), String> {
                 files: RefCell::new(files),
                 externs: RefCell::new(externs),
                 break_pos: None,
+                returned: None,
             };
 
             let a = file.visit(Rc::new(RefCell::new(context.clone())));
@@ -71,9 +72,8 @@ fn main() -> Result<(), String> {
             match a {
                 Ok(_) => {}
                 Err(e) => {
-                    context.module.print_to_stderr();
                     println!("{}", e);
-                    return Err("".to_string());
+                    return Err("Failed to compile".to_string());
                 }
             };
 

@@ -11,6 +11,7 @@ pub struct Position {
     pub line: usize,
     pub col: usize,
     pub file: String,
+    pub pos: usize,
 }
 
 pub fn default_pos() -> FileRange {
@@ -18,11 +19,13 @@ pub fn default_pos() -> FileRange {
         start: Position {
             line: 0,
             col: 0,
+            pos: 0,
             file: "???".to_string(),
         },
         end: Position {
             line: 0,
             col: 0,
+            pos: 0,
             file: "???".to_string(),
         },
     }
@@ -30,6 +33,8 @@ pub fn default_pos() -> FileRange {
 
 impl Position {
     pub fn advance(&mut self, ch: char) {
+        self.pos += 1;
+
         self.col += 1;
         if ch == '\n' {
             self.line += 1;
@@ -40,10 +45,12 @@ impl Position {
 
 impl fmt::Display for FileRange {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let text = &std::fs::read_to_string(self.start.file.clone()).unwrap()
+            [self.start.pos..self.end.pos];
         write!(
             f,
-            "<{}:{}>-<{}:{}>@{}",
-            self.start.line, self.start.col, self.end.line, self.end.col, self.start.file
+            "--- {}<{}:{}>-<{}:{}>\n{}\n---",
+            self.start.file, self.start.line, self.start.col, self.end.line, self.end.col, text
         )
     }
 }

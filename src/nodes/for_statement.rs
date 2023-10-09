@@ -95,4 +95,35 @@ impl<'a> Visitable<'a> for ForStatement {
             value: NodeV::Visited(Value::VoidType),
         })));
     }
+
+    fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
+        let val = self.expr.visit(ctx.clone())?;
+        let Value::Tuple { children } = val.clone().try_into()? else {
+            return Err(Error::BambaError {
+                data: ErrorData::IterateError {
+                    kind: val.try_into()?,
+                },
+                pos: self.pos.clone(),
+            });
+        };
+
+        let childv = Rc::new(RefCell::new(Node {
+            pos: self.pos.clone(),
+            ctx: ctx.clone(),
+            value: NodeV::Visited(Value::VoidType),
+        }));
+
+        ctx.borrow()
+            .locals
+            .borrow_mut()
+            .insert(self.name.clone(), childv.clone());
+
+        for child in children {
+            childv.borrow_mut().value = NodeV::Visited(child.borrow().clone());
+
+            self.child.emit(ctx.clone())?;
+        }
+
+        return Ok(Some(Value::VoidType));
+    }
 }

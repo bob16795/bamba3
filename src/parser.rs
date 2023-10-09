@@ -103,6 +103,37 @@ impl Parsable for ClassExpression {
 }
 
 #[derive(Debug, Clone)]
+pub struct EmitExpression {
+    pub pos: FileRange,
+
+    pub expr: statement::Statement,
+}
+
+impl Parsable for EmitExpression {
+    fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
+        let start = (scn.slice.clone(), scn.pos.clone());
+
+        if scn.match_next(scanner::TokenKind::Emit).is_none() {
+            (scn.slice, scn.pos) = start;
+            return None;
+        }
+
+        let parsed = statement::Statement::parse(scn);
+
+        if parsed.is_none() {
+            (scn.slice, scn.pos) = start;
+            return None;
+        }
+
+        return Some(EmitExpression {
+            pos: (start.1..scn.pos.clone()).into(),
+
+            expr: parsed.unwrap(),
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ComptimeExpression {
     pub pos: FileRange,
 

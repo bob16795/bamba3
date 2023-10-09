@@ -1,0 +1,278 @@
+def std: import "std/std.bam";
+
+def String: std.Types.String;
+
+def Bamsh: class {
+    def malloc: extern fn[] -> *Void;
+    def free: extern fn[] -> Void;
+
+    def getchar: extern fn[] -> i32;
+    def strtok: extern fn[] -> *u8[];
+    def fork: extern fn[] -> i32;
+    def waitpid: extern fn[] -> i32;
+    def execvp: extern fn[] -> i32;
+    def exit: extern fn[] -> Void;
+    def printf: std.Types.printf;
+    def strcmp: extern fn[] -> i32;
+
+    def WUNTRACED: 2;
+
+    def Builtins: class {
+        def DATA: $[
+            $["cd", Self.cd],
+            $["exec", Self.exec],
+        ];
+        
+        def exec: fn[args: *(*u8[])[]] -> Bool {
+            if (*args[usize(1)] == (*u8[])(null)) {
+                printf("expected argument to 'exec'\n");
+            } else {
+                if (execvp(*args[usize(1)], args[usize(1)]) == i32(0 - 1)) {
+                    printf("error running command\n");
+                }
+
+                exit(i32(1));
+            }
+            
+            return Bool(true);
+        };
+
+        def cd: fn[args: *(*u8[])[]] -> Bool {
+            def chdir: extern fn[] -> i32;
+
+            if (*args[usize(1)] == (*u8[])(null)) {
+                printf("expected argument to 'cd'\n");
+            } else {
+                if (chdir(*args[usize(1)])) {
+                    printf("Cant chdir :(\n");
+                }
+            }
+            
+            return Bool(true);
+        };
+    };
+
+    def Command: class {
+        def Condition: class {
+            def DONE: 0;
+            def ALWAYS: 1;
+            def SUCCESS: 2;
+            def FAILURE: 3;
+        };
+
+        def cmd: prop String;
+        def cond: prop u8;
+    };
+    
+    def Result: class {
+        def code: prop u8;
+        def exit: prop Bool;
+    };
+
+    def read_line: fn[] -> String {
+        def result: new String = String.init();
+        def broke: new Bool = Bool(false);
+
+        while (!*broke) {
+            def c: getchar();
+    
+
+            if (c == i32(10)) {
+                if (*result[result.len() - usize(1)] == u8('\')) {
+                    result.base.pop(); 
+                    printf("> ");
+                } else {
+                    broke = Bool(true);
+                }
+            } else if (c == i32(0 - 1)) {
+                broke = Bool(true);
+            } else if (c == i32(128)) {
+                result.base.pop(); 
+            } else {
+                result.base.append(c); 
+            }
+        }
+
+        result[result.len()] = u8(0);
+
+        return *result;
+    };
+
+    def split_cmds: fn[line: *String] -> *Command[] {
+        def result: (*Command[])(malloc(usize(10) * (Command).SIZE));
+        def idx: new usize = usize(0);
+        def line_idx: new usize = usize(0);
+                
+        result[*idx].cmd = String.init();
+
+        while (*line_idx < line.len()) {
+            def ch: *line[*line_idx];
+            def next: *line[*line_idx + usize(1)];
+
+            if (ch == u8(';')) {
+                result[*idx].cond = u8(Command.Condition.ALWAYS);
+                result[*idx].cmd.base.append(u8(0));
+
+                idx = *idx + usize(1);
+
+                if (*idx > usize(10)) {
+                    (new String = String.from("oops")).println();
+                }
+                
+                result[*idx].cmd = String.init();
+            } else if (ch == u8('&') & next == u8('&')) {
+                result[*idx].cond = u8(Command.Condition.SUCCESS);
+                result[*idx].cmd.base.append(u8(0));
+
+                idx = *idx + usize(1);
+                line_idx = *line_idx + usize(1);
+                
+                if (*idx > usize(10)) {
+                    (new String = String.from("oops")).println();
+                }
+                
+                result[*idx].cmd = String.init();
+            } else if (ch == u8('|') & next == u8('|')) {
+                result[*idx].cond = u8(Command.Condition.FAILURE);
+                result[*idx].cmd.base.append(u8(0));
+
+                idx = *idx + usize(1);
+                line_idx = *line_idx + usize(1);
+
+                if (*idx > usize(10)) {
+                    (new String = String.from("oops")).println();
+                }
+                
+                result[*idx].cmd = String.init();
+            } else {
+                result[*idx].cmd.base.append(ch);
+            }
+
+            line_idx = *line_idx + usize(1);
+        }
+                
+        result[*idx].cond = u8(Command.Condition.ALWAYS);
+        result[*idx].cmd.base.append(u8(0));
+
+        idx = *idx + usize(1);
+
+        result[*idx] = $[(*u8[])(null), i32(Command.Condition.DONE)];
+
+        return result;
+    };
+    
+    def split_line: fn[line: *String] -> *(*u8[])[] {
+        def result: (*(*u8[])[])(malloc(usize(10) * (*u8[]).SIZE));
+        def idx: new usize = usize(0);
+
+        def token: new *u8[] = (*u8[])(strtok(line.base.items.ptr, " "));
+
+        while (*token != (*u8[])(null)) {
+            result[*idx] = *token;
+            idx = *idx + usize(1);
+
+            if (*idx > usize(10)) {
+                (new String = String.from("oops")).println();
+            }
+        
+            token = (*u8[])(strtok((*u8[])(null), " "));
+        }
+
+        result[*idx] = null;
+
+        return result;
+    };
+
+    def launch: fn[args: *(*u8[])[]] -> Result {
+        def status: new i32;
+
+        def pid: fork();
+        if (pid == i32(0)) {
+            if (execvp(*args[usize(0)], args) == i32(0 - 1)) {
+                printf("error running command\n");
+            }
+
+            exit(i32(1));
+        } else {
+            def wpid: new i32 = waitpid(pid, status, i32(WUNTRACED));
+            while (!((u8)((*status & i32(127)) + i32(1)) / u8(2)) < u8(128)) {
+                wpid = waitpid(pid, status, i32(WUNTRACED));
+            }
+            def new_status: u8((*status & i32(65280)) / i32(256));
+
+            return Result($[u8(new_status), Bool(true)]);
+        }
+
+        return Result($[u8(255), Bool(true)]);
+    };
+
+    def exec: fn[args: *(*u8[])[]] -> Result {
+        if (*args[usize(0)] == (*u8[])(null)) {
+            return Result($[u8(1), Bool(true)]);
+        }
+
+        for builtin in Builtins.DATA {
+            def t: builtin[0];
+
+            emit {
+                if (strcmp(*args[usize(0)], t) == i32(0)) {
+                    return Result($[u8(0), builtin[1](args)]);
+                }
+            };
+        }
+
+        return launch(args);
+    };
+
+    def loop: fn[] -> Void {
+        def running: new Bool = Bool(true);
+
+        while (*running) {
+            printf("$ ");
+            def line: new String = read_line();
+            def cmds: split_cmds(line);
+
+            def i: new usize = usize(0);
+            def done: new Bool = Bool(false);
+            
+            while (!*done) {
+                def invert: new Bool = Bool(false);
+                if (cmds[*i].cmd.len() != usize(0)) {
+                    if ((*(cmds[*i].cmd)[usize(0)]) == u8('!')) {
+                        cmds[*i].cmd = (cmds[*i].cmd)[usize(1)];
+                        invert = Bool(true);
+                    }
+                }
+                
+                def args: split_line(*cmds[*i].cmd);
+
+                def result: new Result = exec(args);
+
+                if (*invert) {
+                    result.code = u8(*result.code == u8(0));
+                }
+
+                if (*cmds[*i].cond == u8(Command.Condition.SUCCESS)) {
+                    done = *result.code != u8(0);
+                } else if (*cmds[*i].cond == u8(Command.Condition.FAILURE)) {
+                    done = *result.code == u8(0);
+                } else if (*cmds[*i].cond == u8(Command.Condition.DONE)) {
+                    done = Bool(true);
+                }
+
+                i = *i + usize(1);
+
+                running = *result.exit;
+            }
+        }
+
+        return;
+    };
+};
+
+
+force def main: fn[] -> i32 {
+    Bamsh.loop(); 
+
+    return i32(0);
+};

@@ -3,7 +3,7 @@ extern crate llvm_sys as llvmk;
 use crate::errors::*;
 use crate::nodes::*;
 use crate::parser;
-use crate::position::{FileRange, Position};
+use crate::position::{default_pos, FileRange};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -38,6 +38,8 @@ pub struct NodeContext<'ctx> {
     pub break_pos: Option<BasicBlock<'ctx>>,
 
     pub externs: RefCell<HashMap<String, FunctionValue<'ctx>>>,
+
+    pub returned: Option<Rc<RefCell<bool>>>,
 }
 
 impl<'a> NodeContext<'a> {
@@ -195,11 +197,11 @@ impl<'a> PartialEq<Value<'a>> for Value<'a> {
 impl fmt::Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            Value::ConstInt(val) => write!(f, "#i{}", val),
-            Value::ConstReal(val) => write!(f, "#r{}", val),
-            Value::ConstString(val) => write!(f, "'{}'", val),
-            Value::ConstNull => write!(f, "NULL"),
-            Value::ConstBool(b) => write!(f, "B_{}", b),
+            Value::ConstInt(val) => write!(f, "Const Int {}", val),
+            Value::ConstReal(val) => write!(f, "Const Real {}", val),
+            Value::ConstString(val) => write!(f, "Const String '{}'", val),
+            Value::ConstNull => write!(f, "Const Null"),
+            Value::ConstBool(b) => write!(f, "Const Bool {}", b),
             Value::Function {
                 kind: _,
                 input: _,
@@ -208,7 +210,7 @@ impl fmt::Display for Value<'_> {
                 impls: _,
                 ctx: _,
                 name,
-            } => write!(f, "Func[{}]", name),
+            } => write!(f, "Function {}", name),
             Value::Function {
                 kind: _,
                 input: _,
@@ -217,14 +219,14 @@ impl fmt::Display for Value<'_> {
                 ctx: _,
                 impls: _,
                 name: _,
-            } => write!(f, "FuncType[]"),
+            } => write!(f, "Function Type"),
             Value::Class {
                 kind: _,
                 children,
                 name,
             } => write!(
                 f,
-                "Class[{}:\n  {}]",
+                "Class named {} with (\n  {}\n)",
                 name,
                 &children
                     .borrow()
@@ -239,7 +241,7 @@ impl fmt::Display for Value<'_> {
             Value::Tuple { children } => {
                 write!(
                     f,
-                    "Tuple[{}: {}]",
+                    "Tuple length {} of ({})",
                     children.len(),
                     &children.clone().iter().fold(String::new(), |acc, num| acc
                         + ", "
@@ -247,26 +249,37 @@ impl fmt::Display for Value<'_> {
                 )
             }
 
-            Value::BuiltinFunc(v) => write!(f, "{:?}", v),
-            Value::PointerType(v) => write!(f, "TPtr[{}]", v.borrow()),
-            Value::ArrayType { size, child } => write!(f, "TArray[{:?};{}]", size, child.borrow()),
-            Value::IntType { size, signed } => write!(f, "TInt{}{}", size, signed),
-            Value::ClassType => write!(f, "TClass"),
-            Value::ConstType => write!(f, "TConst"),
-            Value::TypeType => write!(f, "TType"),
-            Value::VoidType => write!(f, "TVoid"),
-            Value::FloatType => write!(f, "TFloat"),
-            Value::DoubleType => write!(f, "TDouble"),
-            Value::Value { val, kind } => {
+            Value::BuiltinFunc(v) => write!(f, "BuiltinFunction({:?})", v),
+            Value::PointerType(v) => write!(f, "Pointer To {}", v.borrow()),
+            Value::ArrayType {
+                size: Some(size),
+                child,
+            } => {
+                write!(f, "Array Length {} of {}", size, child.borrow())
+            }
+            Value::ArrayType { size: None, child } => {
+                write!(f, "Array of {}", child.borrow())
+            }
+            Value::IntType { size, signed } => {
+                write!(f, "{} bit Integer type signed: {}", size, signed)
+            }
+            Value::ClassType => write!(f, "Class Type"),
+            Value::ConstType => write!(f, "Const Type"),
+            Value::TypeType => write!(f, "Type Type"),
+            Value::VoidType => write!(f, "Void Type"),
+            Value::FloatType => write!(f, "Float Type"),
+            Value::DoubleType => write!(f, "Double Type"),
+            Value::Value { val: _, kind } => {
                 write!(
                     f,
-                    "val[{} of {}]",
-                    val,
+                    "LLVM Value Of Type {}",
                     <Rc<RefCell<Node<'_>>> as TryInto<Value>>::try_into(kind.clone()).unwrap()
                 )
             }
-            Value::Prop { id, kind: _ } => write!(f, "prop@{:?}", id),
-            Value::Method { func: _, parent: _ } => write!(f, "method"),
+            Value::Prop { id, kind } => {
+                write!(f, "Property {} of Type {}", id.borrow(), kind.borrow())
+            }
+            Value::Method { func: _, parent: _ } => write!(f, "Method"),
         }
     }
 }
@@ -857,8 +870,10 @@ impl<'a> Value<'a> {
                     return Ok(Some(self.clone()));
                 }
 
+                let returned = Rc::new(RefCell::new(false));
+
                 if conts.is_some() {
-                    let (old_func, old) = {
+                    let (old_func, old, old_ret) = {
                         let ctx_borrowed = &mut ctx.borrow_mut();
 
                         let old_blk = ctx_borrowed.builder.get_insert_block();
@@ -891,11 +906,15 @@ impl<'a> Value<'a> {
                             i += 1;
                         }
 
+                        let old_ret = ctx_borrowed.returned.clone();
+
                         impls
                             .borrow_mut()
                             .insert(impl_name.to_string(), FunctionImpl { func });
 
-                        (old_func, old_blk)
+                        ctx_borrowed.returned = Some(returned.clone());
+
+                        (old_func, old_blk, old_ret)
                     };
 
                     conts.clone().unwrap().emit(ctx.clone())?;
@@ -908,6 +927,7 @@ impl<'a> Value<'a> {
                         ctx_borrowed.builder.clear_insertion_position();
                     }
 
+                    ctx.borrow_mut().returned = old_ret;
                     ctx.borrow_mut().func = old_func;
 
                     return Ok(Some(self.clone()));
@@ -930,30 +950,12 @@ impl<'a> Value<'a> {
                 Ok(Some(Value::Value {
                     val: Rc::new(string.as_pointer_value().into()),
                     kind: Rc::new(RefCell::new(Node {
-                        pos: (Position {
-                            line: 0,
-                            col: 0,
-                            file: "lol".to_string(),
-                        }..Position {
-                            line: 0,
-                            col: 0,
-                            file: "lol".to_string(),
-                        })
-                            .into(),
+                        pos: default_pos(),
                         ctx: ctx.clone(),
                         value: NodeV::Visited(Value::ArrayType {
                             size: Some((val.len() + 1).try_into().unwrap()),
                             child: Rc::new(RefCell::new(Node {
-                                pos: (Position {
-                                    line: 0,
-                                    col: 0,
-                                    file: "lol".to_string(),
-                                }..Position {
-                                    line: 0,
-                                    col: 0,
-                                    file: "lol".to_string(),
-                                })
-                                    .into(),
+                                pos: default_pos(),
                                 ctx: ctx.clone(),
                                 value: NodeV::Visited(Value::IntType {
                                     size: 8,
@@ -1011,14 +1013,14 @@ pub enum NodeV<'a> {
 impl fmt::Display for NodeV<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            NodeV::Unvisited(name, _) => {
-                write!(f, "Unvisited {}", name)
+            NodeV::Unvisited(_, _) => {
+                write!(f, "Unvisited")
             }
             NodeV::Visited(v) => {
-                write!(f, "Visited {}", v)
+                write!(f, "{}", v)
             }
-            NodeV::Emited(a, v) => {
-                write!(f, "Emited {} v {}", a, v.borrow())
+            NodeV::Emited(a, _v) => {
+                write!(f, "{}", a)
             }
         }
     }
@@ -1034,7 +1036,7 @@ pub struct Node<'a> {
 
 impl fmt::Display for Node<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "[Node {}]({})", self.value, self.pos)
+        write!(f, "{}", self.value)
     }
 }
 
@@ -1198,7 +1200,7 @@ impl<'a> Node<'a> {
                     }) => {
                         let func_impl = self.clone().get_impl(Some(params))?;
 
-                        let bctx = ctx.borrow();
+                        let bctx = &mut ctx.borrow_mut();
 
                         let val = bctx.builder.build_call(func_impl.func, &p, "call");
 
@@ -1436,6 +1438,22 @@ impl<'a> Node<'a> {
 
                             Ok(Value::Value {
                                 val: val.clone(),
+                                kind: Rc::new(RefCell::new(self.clone())),
+                            })
+                        }
+                        BasicValueEnum::IntValue(int) => {
+                            let kind = self.get_type()?;
+
+                            let val = self
+                                .ctx
+                                .borrow()
+                                .builder
+                                .build_int_to_ptr(int.clone(), kind.into_pointer_type(), "inttoptr")
+                                .unwrap()
+                                .as_basic_value_enum();
+
+                            Ok(Value::Value {
+                                val: Rc::new(val.clone()),
                                 kind: Rc::new(RefCell::new(self.clone())),
                             })
                         }
@@ -1721,7 +1739,9 @@ impl<'a> Node<'a> {
                     }
                 };
 
-                let (old_func, old) = {
+                let returned = Rc::new(RefCell::new(false));
+
+                let (old_func, old, old_returned) = {
                     let ctx_borrowed = &mut sub_ctx.borrow_mut();
 
                     let old_blk = ctx_borrowed.builder.get_insert_block();
@@ -1783,7 +1803,11 @@ impl<'a> Node<'a> {
                         .borrow_mut()
                         .insert(name.to_string(), FunctionImpl { func });
 
-                    (old_func, old_blk)
+                    let old_returned = ctx_borrowed.returned.clone();
+
+                    ctx_borrowed.returned = Some(returned.clone());
+
+                    (old_func, old_blk, old_returned)
                 };
 
                 conts.clone().unwrap().emit(sub_ctx.clone())?;
@@ -1797,6 +1821,7 @@ impl<'a> Node<'a> {
                 }
 
                 ctx_borrowed.func = old_func;
+                ctx_borrowed.returned = old_returned;
 
                 return Ok(impls.borrow().get(&name).unwrap().clone());
             }

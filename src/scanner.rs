@@ -98,18 +98,21 @@ impl Scanner {
             tok_start: Position {
                 line: 1,
                 col: 1,
+                pos: 0,
                 file: file.clone(),
             },
 
             pos: Position {
                 line: 1,
                 col: 1,
+                pos: 0,
                 file: file.clone(),
             },
 
             far: Position {
                 line: 1,
                 col: 1,
+                pos: 0,
                 file,
             },
         }

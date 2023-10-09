@@ -90,6 +90,70 @@ impl<'a> Visitable<'a> for OrExpression {
 
                 match (a.clone(), b.clone()) {
                     (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a | b))),
+                    (
+                        Value::Value {
+                            val: av,
+                            kind: a_type,
+                        },
+                        Value::Value {
+                            val: bv,
+                            kind: b_type,
+                        },
+                    ) => {
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
+
+                        match (&a_type, &b_type) {
+                            (
+                                Value::IntType {
+                                    size: asize,
+                                    signed: asign,
+                                },
+                                Value::IntType {
+                                    size: bsize,
+                                    signed: bsign,
+                                },
+                            ) => {
+                                if asize != bsize || asign != bsign {
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "or".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
+                                    });
+                                }
+
+                                let br = ctx.borrow();
+
+                                let result = br.builder.build_or(
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
+                                    "bitor",
+                                );
+
+                                Ok(Some(Value::Value {
+                                    val: Rc::new(result.unwrap().into()),
+                                    kind: Rc::new(RefCell::new(Node {
+                                        pos: self.pos.clone(),
+                                        ctx: ctx.clone(),
+
+                                        value: NodeV::Visited(a_type.clone()),
+                                    })),
+                                }))
+                            }
+
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "or".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
+                            }),
+                        }
+                    }
 
                     _ => Err(Error::BambaError {
                         data: ErrorData::EmitBinaryOpError {

@@ -65,6 +65,8 @@ impl<'a> Visitable<'a> for ReturnStatement {
 
                 let _ = ctx_borrow.builder.build_return(None);
 
+                *ctx.borrow().returned.clone().unwrap().borrow_mut() = true;
+
                 Ok(None)
             }
             Some(expr) => {
@@ -76,12 +78,16 @@ impl<'a> Visitable<'a> for ReturnStatement {
 
                         let _ = ctx_borrow.builder.build_return(Some(val.as_ref()));
 
+                        *ctx.borrow().returned.clone().unwrap().borrow_mut() = true;
+
                         Ok(None)
                     }
                     None | Some(Value::VoidType) => {
                         let ctx_borrow = ctx.borrow();
 
                         let _ = ctx_borrow.builder.build_return(None);
+
+                        *ctx.borrow().returned.clone().unwrap().borrow_mut() = true;
 
                         Ok(None)
                     }

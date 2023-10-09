@@ -21,7 +21,7 @@ pub enum StatementChild {
 
 #[derive(Debug, Clone)]
 pub struct Statement {
-    pos: FileRange,
+    pub pos: FileRange,
 
     child: Box<StatementChild>,
 }

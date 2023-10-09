@@ -70,10 +70,18 @@ impl<'a> Visitable<'a> for BlockStatement {
     }
 
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
+        let mut result: Option<Value> = None;
+
         for node in &self.body {
-            node.emit(ctx.clone())?;
+            if *ctx.borrow().returned.clone().unwrap().borrow() == true {
+                return Err(Error::BambaError {
+                    data: ErrorData::CodeAfterReturnError,
+                    pos: node.pos.clone(),
+                });
+            }
+            result = node.emit(ctx.clone())?;
         }
 
-        Ok(None)
+        Ok(result)
     }
 }

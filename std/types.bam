@@ -262,6 +262,13 @@ def Result: fn[T, E] -> Class {
 
 def String: class {
     def base: prop ArrayList(u8);  
+    
+    def init: fn[] -> Self {
+        def result: new Self;
+        result.base.init();
+
+        return *result;
+    };
 
     def from: fn[s: *u8[]] -> Self {
         def result: new Self;
@@ -294,5 +301,13 @@ def String: class {
         printf("%.*s\n", *self.base.items.len, *self.base.items.ptr);
 
         return;
+    };
+
+    def len: fn[self: *Self] -> usize {
+        return *self.base.items.len;
+    };
+
+    def `[]`: fn[self: *Self, idx: usize] -> *u8 {
+        return self.base[idx];
     };
 };

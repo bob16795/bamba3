@@ -9,6 +9,5 @@ edition = "2021"
 llvm-sys = { version = "160", features = ["prefer-dynamic"] }
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"] }
 clap = { version = "4.4.6", features = ["derive"] }
-anyhow = "1.0.75"
 thiserror = "1.0"
 

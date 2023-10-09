@@ -33,8 +33,8 @@ def RigidBody: class {
     def acc: prop Vec2;
 
     def init: fn[self: *Self] -> *Self {
-        self.vel = ${f64(0.0), f64(0.0)};
-        self.acc = ${f64(0.0), f64(0.0)};
+        self.vel = $[f64(0.0), f64(0.0)];
+        self.acc = $[f64(0.0), f64(0.0)];
         
         return self;
     };
@@ -46,8 +46,8 @@ def Transform: class {
     def rot: prop f64;
 
     def init: fn[self: *Self] -> *Self {
-        self.pos = ${f64(0.0), f64(0.0)};
-        self.scale = ${f64(100.0), f64(100.0)};
+        self.pos = $[f64(0.0), f64(0.0)];
+        self.scale = $[f64(100.0), f64(100.0)];
         self.rot = f64(0.0);
 
         return self;
@@ -55,9 +55,9 @@ def Transform: class {
 };
 
 def Drawable: std.Types.Interface(
-    ${
-        ${"draw", Void}
-    }, class {
+    $[
+        $["draw", Void]
+    ], class {
         def transform: prop *Transform;
         def dt: prop f64;
 
@@ -89,7 +89,7 @@ def Sprite: class {
         result.animation = i32(0);
         result.counter = f64(0);
         result.time = f64(0.2);
-        result.size = ${f64(16), f64(16)};
+        result.size = $[f64(16), f64(16)];
 
         return *result;
     };
@@ -124,7 +124,7 @@ def Player: class {
     def speed: prop f64;
 
     def init: fn[self: *Self] -> *Self {
-        self.input = ${f64(0.0), f64(0.0)};
+        self.input = $[f64(0.0), f64(0.0)];
         self.speed = f64(0.1);
         
         return self;
@@ -139,8 +139,8 @@ def RectCollider: class {
     def colliding: prop Bool;
 
     def init: fn[self: *Self] -> *Self {
-        self.offset = ${f64(0.0), f64(0.0)};
-        self.size = ${TILE_SIZE, TILE_SIZE};
+        self.offset = $[f64(0.0), f64(0.0)];
+        self.size = $[TILE_SIZE, TILE_SIZE];
         
         return self;
     };
@@ -159,7 +159,7 @@ def Map: class {
     def init: fn[self: *Self, image: *(u8[])] -> *Self {
         def surface: sdl.Surface.create(image);
         self.tex = sdl.Texture.create(renderer, surface);
-        self.tile_size = ${f64(16), f64(16)};
+        self.tile_size = $[f64(16), f64(16)];
 
         def y: new usize = usize(0);
 
@@ -169,7 +169,7 @@ def Map: class {
             while (*x > usize(0)) {
                 x = *x - usize(1);
 
-                self.tiles[*x][*y] = ${i32(*x % usize(2)), i32(*y % usize(2))};
+                self.tiles[*x][*y] = $[i32(*x % usize(2)), i32(*y % usize(2))];
             }
 
             y = *y + usize(1);
