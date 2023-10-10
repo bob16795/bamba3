@@ -1,0 +1,22 @@
+def Closure: fn[I, P, O, Func] -> Class {
+    return class {
+        def I: I;
+        def P: P;
+        def O: O;
+
+        def data: prop I;
+
+        def init: fn[inside: I] -> Self {
+            def result: new Self;
+
+            result.data = inside;
+
+            return result;
+        };
+
+        def `()`: fn[self: *Self, params: Self.P] -> Self.O {
+            return Func(*self.data, params);
+        };
+    };
+};
+

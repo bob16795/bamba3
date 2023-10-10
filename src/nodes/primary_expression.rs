@@ -30,7 +30,7 @@ pub struct PrimaryExpression {
 
 impl Parsable for PrimaryExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let parsed = ConstIntExpression::parse(scn);
         if parsed.is_some() {
@@ -116,7 +116,7 @@ impl Parsable for PrimaryExpression {
             });
         }
 
-        (scn.slice, scn.pos) = start;
+        scn.set_checkpoint(start);
         None
     }
 }

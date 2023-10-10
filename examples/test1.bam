@@ -76,19 +76,19 @@ def getMain: fn[Start] -> (fn[] -> i32) {
             def closureInstance: new ClosureTest;
             
             // set the initial value
-            def initVal: new ClosureTest.I = ${*a};
+            def initVal: new ClosureTest.I = $[*a];
             closureInstance = ClosureTest.init(*initVal);
 
             // create a runner value
             def runVal: new ClosureTest.P;
 
             // run the test with 10
-            runVal = ${i32(10)};
-            ClosureTest.run(closureInstance, *runVal);
+            runVal = $[i32(10)];
+            closureInstance(*runVal);
 
             // run the test with 20
-            runVal = ${i32(20)};
-            ClosureTest.run(closureInstance, *runVal);
+            runVal = $[i32(20)];
+            closureInstance(*runVal);
 
             // misc stuff
             def drivables: new drivablesType;
@@ -138,7 +138,7 @@ def getMain: fn[Start] -> (fn[] -> i32) {
 
             return i32(0);
         };
-    } else ERROR("Expected Value < 10");
+    } else @ERROR("Expected Value < 10");
 };
 
 force def main: getMain(10);

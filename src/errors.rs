@@ -71,4 +71,6 @@ pub enum ErrorData<'a> {
 pub enum Error<'a> {
     #[error("Error: {data}\n\n{pos}\n")]
     BambaError { pos: FileRange, data: ErrorData<'a> },
+    #[error(transparent)]
+    Other(#[from] inkwell::builder::BuilderError),
 }

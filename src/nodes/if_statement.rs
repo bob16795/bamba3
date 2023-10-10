@@ -20,27 +20,27 @@ pub struct IfStatement {
 
 impl Parsable for IfStatement {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::If).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::LeftParen).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let expr = top_expression::TopExpression::parse(scn);
 
         if expr.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::RightParen).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -50,7 +50,7 @@ impl Parsable for IfStatement {
                 let other = statement::Statement::parse(scn);
 
                 if other.is_none() {
-                    (scn.slice, scn.pos) = start;
+                    scn.set_checkpoint(start);
                     return None;
                 }
 
@@ -72,7 +72,7 @@ impl Parsable for IfStatement {
             });
         }
 
-        (scn.slice, scn.pos) = start;
+        scn.set_checkpoint(start);
         None
     }
 }

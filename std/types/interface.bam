@@ -1,0 +1,42 @@
+def Interface: fn[V, D] -> Class {
+    def Result: class {
+        def Data: D;
+
+        def data: prop D;
+        def self: prop *Void;
+
+        def VTable: class {
+            def LIST: V;
+        };
+    };
+
+    for FnEntry in (V) {
+        @ADD_DEF(Result.VTable, FnEntry[0], prop *fn[func: *Void, data: *Result.Data] -> FnEntry[1]);
+        def funcImpl: fn[self: *Result] -> FnEntry[1] {
+            return (*@GET_PROP(self.vtable, FnEntry[0]))(*self.self, self.data);
+        };
+
+        @ADD_DEF(Result, FnEntry[0], @SET_NAME(funcImpl, FnEntry[0]));
+    }
+
+    @ADD_DEF(Result, "vtable", prop Result.VTable);
+
+    def initImpl: fn[T: Type, instance: *Void] -> Result {
+        def result: new Result;
+        
+        result.self = instance;
+        result.data = Result.Data.init();
+
+        for FnEntry in (Result.VTable.LIST) {
+            def entryName: FnEntry[0];
+
+            @GET_PROP(result.vtable, entryName) = @GET_PROP(T, entryName);
+        }
+
+        return *result;
+    };
+
+    @ADD_DEF(Result, "init", initImpl);
+
+    return Result;
+};

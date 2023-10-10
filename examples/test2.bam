@@ -14,4 +14,6 @@ def mainBuilderBuilder: class {
     };
 };
 
-force def main: mainBuilderBuilder.buildMainBuilder(*u8[]).buildMain("Hello World!");
+force def main: comptime {
+    return mainBuilderBuilder.buildMainBuilder(*u8[]);
+}.buildMain("Hello World!");

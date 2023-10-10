@@ -18,16 +18,16 @@ pub struct PropExpression {
 
 impl Parsable for PropExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::Prop).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let kind = top_expression::TopExpression::parse(scn);
         if kind.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 

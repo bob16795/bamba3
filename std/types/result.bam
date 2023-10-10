@@ -1,0 +1,23 @@
+def Result: fn[T, E] -> Class {
+    return class {
+        def isErr: prop Bool;
+        def valv: prop T;
+        def errv: prop E;
+        
+        def ok: fn[base: T] -> Self {
+            def result: new Self;
+            result.isErr = Bool(false);
+            result.val = base;
+
+            return *result;
+        };
+
+        def err: fn[base: E] -> Self {
+            def result: new Self;
+            result.isErr = Bool(true);
+            result.err = base;
+
+            return *result;
+        };
+    };
+};

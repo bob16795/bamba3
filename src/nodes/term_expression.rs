@@ -23,11 +23,11 @@ pub struct TermExpression {
 
 impl Parsable for TermExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
         let first = factor_expression::FactorExpression::parse(scn);
 
         if first.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -35,7 +35,7 @@ impl Parsable for TermExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -50,7 +50,7 @@ impl Parsable for TermExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 

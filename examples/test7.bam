@@ -1,0 +1,12 @@
+force def main: fn[] -> i32 { // main function signature
+    @SET_NAME(extern fn[] -> Void, "printf") // create printf extern
+        ("Hello %s\n", // call printf with praram "Hello %s"
+            (
+                fn[] -> *i8[] { // create a function that returns a string
+                    return "World!"; // return the string "World!"
+                }
+            )() // call the sub function
+        ); // finish printf call
+
+    return i32(0); // return 0 for crt0.o
+};

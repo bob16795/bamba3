@@ -1,10 +1,10 @@
 def std: import "std/std.bam";
 
 def Drivable: std.Types.Interface(
-    ${
-        ${"drive", Void},
-        ${"accident", i32}
-    }, class {
+    $[
+        $["drive", Void],
+        $["accident", i32]
+    ], class {
         def pos: prop i64;
 
         def init: fn[] -> Self {
@@ -95,7 +95,7 @@ def Cycle: class {
     };
 };
 
-def updateOrder: ${0, 1, 0, 1, 0, 1};
+def updateOrder: $[0, 1, 0, 1, 0, 1];
 
 force def main: fn[] -> Void {
     def car: new Car = Car.init(i64(10), i64(2));
@@ -130,7 +130,7 @@ force def main: fn[] -> Void {
     }
 
     def OptI32: comptime {
-        return std.Types.Optional(i32);
+        return std.Types.Option(i32);
     };
 
     def opt: new OptI32 = OptI32.some(i32(10));

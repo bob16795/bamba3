@@ -25,13 +25,13 @@ pub struct UnaryExpression {
 
 impl Parsable for UnaryExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::Exclaim).is_some() {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -46,7 +46,7 @@ impl Parsable for UnaryExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -61,7 +61,7 @@ impl Parsable for UnaryExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -75,7 +75,7 @@ impl Parsable for UnaryExpression {
         let next = call_expression::CallExpression::parse(scn);
 
         if next.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 

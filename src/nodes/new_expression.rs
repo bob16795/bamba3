@@ -18,16 +18,16 @@ pub struct NewExpression {
 
 impl Parsable for NewExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::New).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let kind = unary_expression::UnaryExpression::parse(scn);
         if kind.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 

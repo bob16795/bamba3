@@ -1,0 +1,1 @@
+def entry: import "std/core/entry.bam".entry;

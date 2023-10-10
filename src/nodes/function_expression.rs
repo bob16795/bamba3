@@ -18,11 +18,11 @@ pub struct FunctionParam {
 
 impl Parsable for FunctionParam {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let name = scn.match_next(scanner::TokenKind::Identifier);
         if name.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -40,7 +40,7 @@ impl Parsable for FunctionParam {
         let expr = top_expression::TopExpression::parse(scn);
 
         if expr.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -61,10 +61,10 @@ pub struct FunctionHeader {
 
 impl Parsable for FunctionHeader {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::LeftBracket).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -76,7 +76,7 @@ impl Parsable for FunctionHeader {
                 input.push(def.unwrap());
                 if scn.match_next(scanner::TokenKind::Comma).is_none() {
                     if scn.match_next(scanner::TokenKind::RightBracket).is_none() {
-                        (scn.slice, scn.pos) = start;
+                        scn.set_checkpoint(start);
                         return None;
                     }
 
@@ -84,7 +84,7 @@ impl Parsable for FunctionHeader {
                 }
             } else {
                 if scn.match_next(scanner::TokenKind::RightBracket).is_none() {
-                    (scn.slice, scn.pos) = start;
+                    scn.set_checkpoint(start);
                     return None;
                 }
 
@@ -93,14 +93,14 @@ impl Parsable for FunctionHeader {
         }
 
         if scn.match_next(scanner::TokenKind::Arrow).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let output = top_expression::TopExpression::parse(scn);
 
         if output.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -122,19 +122,19 @@ pub struct FunctionExpression {
 
 impl Parsable for FunctionExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let ext = scn.match_next(scanner::TokenKind::Extern).is_some();
 
         if scn.match_next(scanner::TokenKind::Fn).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let header = FunctionHeader::parse(scn);
 
         if header.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 

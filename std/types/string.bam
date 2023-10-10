@@ -1,0 +1,51 @@
+def String: class {
+    def base: prop ArrayList(u8);  
+    
+    def init: fn[] -> Self {
+        def result: new Self;
+        result.base.init();
+
+        return *result;
+    };
+
+    def from: fn[s: *u8[]] -> Self {
+        def result: new Self;
+        result.base.init();
+
+        def st: new *u8[] = s;
+
+        while (*(*st)[usize(0)] != u8(0)) {
+            result.base.append(*(*st)[usize(0)]);
+
+            st = usize(*st) + usize(1);
+        }
+
+        return *result;
+    };
+
+    def append: fn[self: *Self, s: *u8[]] -> Void {
+        def st: new *u8[] = s;
+
+        while (*(*st)[usize(0)] != u8(0)) {
+            self.base.append(*(*st)[usize(0)]);
+
+            st = usize(*st) + usize(1);
+        }
+
+        return *self;
+    };
+
+    def println: fn[self: *Self] -> Void {
+        printf("%.*s\n", *self.base.items.len, *self.base.items.ptr);
+
+        return;
+    };
+
+    def len: fn[self: *Self] -> usize {
+        return *self.base.items.len;
+    };
+
+    def `[]`: fn[self: *Self, idx: usize] -> *u8 {
+        return self.base[idx];
+    };
+};

@@ -1,0 +1,25 @@
+def entry: fn[main, panic] -> (fn[] -> i32) {
+    def exit: extern fn[] -> Void;
+
+    @PRINT("has entry");
+
+    return fn[] -> i32 {
+        def result: main();
+
+        if (result.TYPE == i32) {
+            if (result != i32(0)) {
+                panic(result);
+    
+                return result;
+            }
+        } else {
+            def res: new (result.TYPE) = result;
+
+            if (*res.isErr) {
+                panic(res);
+            }
+        }
+
+        return i32(0);
+    };
+};

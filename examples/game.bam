@@ -507,11 +507,11 @@ def setupSigs: fn[] -> Void {
 def renderer: new sdl.Renderer;
 
 // main fn
-force def main: fn[] -> i32 {
+def main_main: fn[] -> std.Types.Result(i32, std.Types.String) {
     if (sdl.init(u32(sdl.InitFlags.EVERYTHING)) != u32(0)) {
         printf("FAILED\n");
 
-        return i32(0);
+        return i32(1);
     }
     
     def window: sdl.Window.create(WINDOW_NAME, i32(WINDOW_DIMS_X), i32(WINDOW_DIMS_Y), u32(0));
@@ -593,12 +593,12 @@ force def main: fn[] -> i32 {
             }
         }
 
-        def dt: sdl.getDT();
+        def dt: f64(sdl.getDT());
         
         collisionSystem.collide();
 
-        playerSystem.update(f64(dt));
-        physicsSystem.update(f64(dt));
+        playerSystem.update(dt);
+        physicsSystem.update(dt);
 
         renderer.drawColor(u8(55), u8(54), u8(74), u8(255));
         renderer.clear();
@@ -612,3 +612,10 @@ force def main: fn[] -> i32 {
     return i32(0);
 };
 
+def panic: fn[val: i32] -> Void {
+    printf("panic %d\n", val);
+
+    return;
+};
+
+force def main: std.Core.entry(main_main, panic);

@@ -35,12 +35,11 @@ pub struct CallExpression {
 
 impl Parsable for CallExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
-
+        let start = scn.get_checkpoint();
         let next = primary_expression::PrimaryExpression::parse(scn);
 
         if next.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -55,11 +54,11 @@ impl Parsable for CallExpression {
         while added {
             added = false;
 
-            let sub_start = (scn.slice.clone(), scn.pos.clone());
+            let sub_start = scn.get_checkpoint();
             if scn.match_next(scanner::TokenKind::Dot).is_some() {
                 let prop = scn.match_next(scanner::TokenKind::Identifier);
                 if prop.is_none() {
-                    (scn.slice, scn.pos) = sub_start.clone();
+                    scn.set_checkpoint(sub_start.clone());
                 } else {
                     next = CallExpression {
                         pos: (next.pos.start.clone()..scn.pos.clone()).into(),
@@ -78,7 +77,7 @@ impl Parsable for CallExpression {
                 let index = top_expression::TopExpression::parse(scn);
 
                 if scn.match_next(scanner::TokenKind::RightBracket).is_none() {
-                    (scn.slice, scn.pos) = sub_start.clone();
+                    scn.set_checkpoint(sub_start.clone());
                 } else {
                     next = CallExpression {
                         pos: (next.pos.start.clone()..scn.pos.clone()).into(),
@@ -104,7 +103,7 @@ impl Parsable for CallExpression {
                         params.push(def.unwrap());
                         if scn.match_next(scanner::TokenKind::Comma).is_none() {
                             if scn.match_next(scanner::TokenKind::RightParen).is_none() {
-                                (scn.slice, scn.pos) = sub_start;
+                                scn.set_checkpoint(sub_start);
                                 bad = true;
                             }
 
@@ -112,7 +111,7 @@ impl Parsable for CallExpression {
                         }
                     } else {
                         if scn.match_next(scanner::TokenKind::RightParen).is_none() {
-                            (scn.slice, scn.pos) = sub_start;
+                            scn.set_checkpoint(sub_start.clone());
                             bad = true;
                         }
 

@@ -19,27 +19,27 @@ pub struct WhileStatement {
 
 impl Parsable for WhileStatement {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::While).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::LeftParen).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let expr = top_expression::TopExpression::parse(scn);
 
         if expr.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::RightParen).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -53,20 +53,37 @@ impl Parsable for WhileStatement {
             });
         }
 
-        (scn.slice, scn.pos) = start;
+        scn.set_checkpoint(start);
         None
     }
 }
 
 impl<'a> Visitable<'a> for WhileStatement {
-    fn visit(
-        &self,
-        _ctx: Rc<RefCell<NodeContext<'a>>>,
-    ) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
-        Err(Error::BambaError {
-            data: ErrorData::TodoError("visit if statement".to_string()),
+    fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
+        loop {
+            let cond = self.expr.visit(ctx.clone())?;
+            match cond.try_into()? {
+                Value::ConstBool(b) => {
+                    if !b {
+                        break;
+                    }
+                }
+                cond => {
+                    return Err(Error::BambaError {
+                        pos: self.pos.clone(),
+                        data: ErrorData::ZeroCompareError { value: cond },
+                    })
+                }
+            }
+
+            self.child.visit(ctx.clone())?;
+        }
+
+        Ok(Rc::new(RefCell::new(Node {
             pos: self.pos.clone(),
-        })
+            ctx: ctx.clone(),
+            value: NodeV::Visited(Value::VoidType),
+        })))
     }
 
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {

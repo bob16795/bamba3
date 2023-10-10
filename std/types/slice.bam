@@ -1,0 +1,38 @@
+def Slice: fn[T] -> Class {
+    return class {
+        def itemSize: T.SIZE;
+
+        def ptr: prop *(T[]);
+        def len: prop usize;
+
+        def set_empty: fn[self: *Self] -> Void {
+            self.ptr = null;
+            self.len = usize(0);
+
+            return;
+        };
+
+        def initFrom: fn[ptr: *T, len: usize] -> Self {
+            def result: new Self;
+            result.ptr = ptr;
+            result.len = len;
+
+            return *result;
+        };
+
+        def cut: fn[self: *Self, range: Range] -> Self {
+            def result: new Self;
+            def tmp_range: new Range = range;
+
+            result.ptr = usize(*self.ptr) + (usize)(*tmp_range.start * itemSize);
+            result.len = *tmp_range.end - *tmp_range.start;
+
+            return *result;
+        };
+
+        def `[]`: fn[self: *Self, idx: usize] -> *T {
+            return (*self.ptr)[idx];
+        };
+    };
+};
+

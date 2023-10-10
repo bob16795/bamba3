@@ -73,7 +73,7 @@ pub struct Token {
 
 pub struct Scanner {
     src: String,
-    pub slice: std::ops::Range<usize>,
+    slice: std::ops::Range<usize>,
 
     pub tok_start: Position,
     pub pos: Position,
@@ -90,6 +90,16 @@ pub fn get_alpha_ident() -> Vec<char> {
 }
 
 impl Scanner {
+    pub fn get_checkpoint(&mut self) -> (std::ops::Range<usize>, Position) {
+        self.skip_whitespace();
+
+        (self.slice.clone(), self.pos.clone())
+    }
+
+    pub fn set_checkpoint(&mut self, pos: (std::ops::Range<usize>, Position)) {
+        (self.slice, self.pos) = pos;
+    }
+
     pub fn new(src: String, file: String) -> Self {
         Scanner {
             src,

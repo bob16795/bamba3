@@ -1,5 +1,3 @@
-
-
 force def main: fn[] -> Void {
     def printf: extern fn[] -> Void;
 

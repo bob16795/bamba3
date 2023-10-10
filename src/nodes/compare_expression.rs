@@ -34,22 +34,10 @@ impl<'a> CompareExpression {
         p: IntPredicate,
     ) -> Result<Option<Value<'a>>, Error<'a>> {
         match (a.clone(), b.clone()) {
-            (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt({
+            (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstBool({
                 match p {
-                    IntPredicate::NE => {
-                        if a != b {
-                            1
-                        } else {
-                            0
-                        }
-                    }
-                    IntPredicate::EQ => {
-                        if a == b {
-                            1
-                        } else {
-                            0
-                        }
-                    }
+                    IntPredicate::NE => a != b,
+                    IntPredicate::EQ => a == b,
                     _ => todo!(),
                 }
             }))),
@@ -205,11 +193,11 @@ impl<'a> CompareExpression {
 
 impl Parsable for CompareExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
         let first = term_expression::TermExpression::parse(scn);
 
         if first.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -217,7 +205,7 @@ impl Parsable for CompareExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -232,7 +220,7 @@ impl Parsable for CompareExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -250,7 +238,7 @@ impl Parsable for CompareExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -268,7 +256,7 @@ impl Parsable for CompareExpression {
             let next = Self::parse(scn);
 
             if next.is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -299,7 +287,7 @@ impl<'a> Visitable<'a> for CompareExpression {
                         pos: self.pos.clone(),
                         ctx: ctx.clone(),
 
-                        value: NodeV::Visited(Value::ConstInt(if a != b { 1 } else { 0 })),
+                        value: NodeV::Visited(Value::ConstBool(a != b)),
                     }))),
 
                     _ => Err(Error::BambaError {
@@ -321,7 +309,7 @@ impl<'a> Visitable<'a> for CompareExpression {
                         pos: self.pos.clone(),
                         ctx: ctx.clone(),
 
-                        value: NodeV::Visited(Value::ConstInt(if a == b { 1 } else { 0 })),
+                        value: NodeV::Visited(Value::ConstBool(a == b)),
                     }))),
 
                     _ => Err(Error::BambaError {
@@ -343,7 +331,7 @@ impl<'a> Visitable<'a> for CompareExpression {
                         pos: self.pos.clone(),
                         ctx: ctx.clone(),
 
-                        value: NodeV::Visited(Value::ConstInt(if a > b { 1 } else { 0 })),
+                        value: NodeV::Visited(Value::ConstBool(a > b)),
                     }))),
 
                     _ => Err(Error::BambaError {
@@ -365,7 +353,7 @@ impl<'a> Visitable<'a> for CompareExpression {
                         pos: self.pos.clone(),
                         ctx: ctx.clone(),
 
-                        value: NodeV::Visited(Value::ConstInt(if a < b { 1 } else { 0 })),
+                        value: NodeV::Visited(Value::ConstBool(a < b)),
                     }))),
 
                     _ => Err(Error::BambaError {

@@ -1,0 +1,30 @@
+def Option: fn[T] -> Class {
+    return class {
+        def BASE_TYPE: T;
+        def val: prop BASE_TYPE;
+        def has: prop Bool;
+
+        def none: fn[] -> Self {
+            def result: new Self;
+            result.has = Bool(false);
+
+            return *result;
+        };
+
+        def some: fn[base: *BASE_TYPE] -> Self {
+            def result: new Self;
+            result.val = base;
+            result.has = Bool(true);
+
+            return *result;
+        };
+    
+        def is_none: fn[self: *Self] -> Bool {
+            return *self.has == Bool(false);
+        };
+        
+        def is_some: fn[self: *Self] -> Bool {
+            return *self.has == Bool(true);
+        };
+    };
+};

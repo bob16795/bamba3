@@ -48,10 +48,10 @@ impl fmt::Display for FileRange {
         let text = &std::fs::read_to_string(self.start.file.clone())
             .unwrap()
             .split("\n")
-            .collect::<Vec<_>>()[self.start.line..=self.end.line]
+            .collect::<Vec<_>>()[self.start.line - 1..=self.end.line - 1]
             .iter()
             .enumerate()
-            .map(|(x, y)| format!("{} |{}", self.start.line + x + 1, y))
+            .map(|(x, y)| format!("{:width$} |{}", self.start.line + x, y, width = 4))
             .collect::<Vec<_>>()
             .join("\n");
         write!(

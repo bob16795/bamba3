@@ -1,0 +1,13 @@
+def Range: class {
+    def start: prop usize;
+    def end: prop usize;
+
+    def init: fn[start: usize, end: usize] -> Self {
+        def result: new Self;
+
+        result.start = start;
+        result.end = end;
+
+        return *result;
+    };
+};

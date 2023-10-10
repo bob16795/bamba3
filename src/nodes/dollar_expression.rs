@@ -16,15 +16,15 @@ pub struct DollarExpression {
 
 impl Parsable for DollarExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::Dollar).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::LeftBracket).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -36,7 +36,7 @@ impl Parsable for DollarExpression {
                 vals.push((def.unwrap(), None));
                 if scn.match_next(scanner::TokenKind::Comma).is_none() {
                     if scn.match_next(scanner::TokenKind::RightBracket).is_none() {
-                        (scn.slice, scn.pos) = start;
+                        scn.set_checkpoint(start);
 
                         return None;
                     }
@@ -45,7 +45,7 @@ impl Parsable for DollarExpression {
                 }
             } else {
                 if scn.match_next(scanner::TokenKind::RightBracket).is_none() {
-                    (scn.slice, scn.pos) = start;
+                    scn.set_checkpoint(start);
                     return None;
                 }
 

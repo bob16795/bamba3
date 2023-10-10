@@ -18,29 +18,29 @@ pub struct ForStatement {
 
 impl Parsable for ForStatement {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::For).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let name = scn.match_next(scanner::TokenKind::Identifier);
 
         if name.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::In).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let expr = top_expression::TopExpression::parse(scn);
 
         if expr.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -55,7 +55,7 @@ impl Parsable for ForStatement {
             });
         }
 
-        (scn.slice, scn.pos) = start;
+        scn.set_checkpoint(start);
         None
     }
 }

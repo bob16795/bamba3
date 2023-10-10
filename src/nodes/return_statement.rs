@@ -15,10 +15,10 @@ pub struct ReturnStatement {
 }
 impl Parsable for ReturnStatement {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::Return).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -33,7 +33,7 @@ impl Parsable for ReturnStatement {
         let parsed = top_expression::TopExpression::parse(scn);
 
         if scn.match_next(scanner::TokenKind::SemiColon).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 

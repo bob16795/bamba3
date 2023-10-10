@@ -1,0 +1,86 @@
+def ArrayList: fn[T] -> Class {
+    return class {
+        def SliceT: Slice(T);
+        def itemSize: T.SIZE;
+
+        def items: prop SliceT;
+        def capacity: prop usize;
+
+        def init: fn[self: *Self] -> Void {
+            self.capacity = usize(0);
+            self.items.set_empty();
+
+            return;
+        };
+
+        def extend: fn[self: *Self] -> Void {
+            self.capacity = *self.capacity * usize(2);
+            if (*self.capacity == usize(0)) 
+                self.capacity = usize(1);
+
+            self.items.ptr = realloc(*self.items.ptr, Self.itemSize * *self.capacity);
+
+            return;
+        };
+
+        def append: fn[self: *Self, adds: T] -> Void {
+            def oldSize: *self.items.len;
+
+            self.items.len = *self.items.len + usize(1);
+
+            if (*self.capacity < *self.items.len) {
+                self.extend();
+            }
+
+            (*self.items.ptr)[oldSize] = adds;
+
+            return;
+        };        
+
+        def pop: fn[self: *Self] -> T {
+            self.items.len = *self.items.len - usize(1);
+
+            return *((*self.items.ptr)[*self.items.len]);
+        };
+
+        def erase: fn[self: *Self, val: T] -> Void {
+            def i: new usize = usize(0);
+            def len: new usize = usize(0);
+
+            while (*i < *self.items.len) {
+                if (*(*self.items.ptr)[*i] != val) {
+                    if (*len != *i) {
+                        (*self.items.ptr)[*len] = *(*self.items.ptr)[*i];
+                    }
+
+                    len = *len + usize(1);
+                }
+
+                i = *i + usize(1);
+            }
+
+            self.items.len = *len;
+
+            return;
+        };
+
+        def contains: fn[self: *Self, val: T] -> Bool {
+            def i: new usize = usize(0);
+            def result: new Bool = Bool(false);
+
+            while (*i < *self.items.len) {
+                if (*(*self.items.ptr)[*i] == val)
+                    result = Bool(true);
+
+                i = *i + usize(1);
+            }
+
+            return *result;
+        };
+        
+        def `[]`: fn[self: *Self, idx: usize] -> *T {
+            return self.items[idx];
+        };
+    };
+};
+

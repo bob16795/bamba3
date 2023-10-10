@@ -1,3 +1,0 @@
-def PI: 314159;
-
-def test: i32(PI);

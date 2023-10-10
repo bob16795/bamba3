@@ -16,12 +16,12 @@ pub struct ExpressionStatement {
 
 impl Parsable for ExpressionStatement {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let parsed = top_expression::TopExpression::parse(scn);
         if parsed.is_some() {
             if scn.match_next(scanner::TokenKind::SemiColon).is_none() {
-                (scn.slice, scn.pos) = start;
+                scn.set_checkpoint(start);
                 return None;
             }
 
@@ -32,7 +32,7 @@ impl Parsable for ExpressionStatement {
             });
         }
 
-        (scn.slice, scn.pos) = start;
+        scn.set_checkpoint(start);
         None
     }
 }

@@ -1,0 +1,22 @@
+force def main: fn[] -> i32 {
+    def a: class {
+        def VAL: 0;
+    };
+
+    def printf: extern fn[] -> Void;
+
+    def lol: comptime {
+        while (a.VAL < 10) {
+            emit {
+                printf("%d\n", i32(a.VAL));
+            };
+            @ADD_DEF(a, "VAL", a.VAL + 1);
+        }
+    };
+
+    if (!(lol == Void)) {
+        @ERROR("not void");
+    }
+
+    return i32(a.VAL);
+};

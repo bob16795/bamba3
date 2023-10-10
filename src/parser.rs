@@ -17,11 +17,11 @@ pub struct ConstRealExpression {
 
 impl Parsable for ConstRealExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let num = scn.match_next(scanner::TokenKind::Float);
         if num == None {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
 
             return None;
         }
@@ -42,11 +42,11 @@ pub struct ConstIntExpression {
 
 impl Parsable for ConstIntExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let num = scn.match_next(scanner::TokenKind::Number);
         if num == None {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
 
             return None;
         }
@@ -67,15 +67,15 @@ pub struct ClassExpression {
 
 impl Parsable for ClassExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::Class).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::LeftBrace).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -87,7 +87,7 @@ impl Parsable for ClassExpression {
                 body.push(def.unwrap());
             } else {
                 if scn.match_next(scanner::TokenKind::RightBrace).is_none() {
-                    (scn.slice, scn.pos) = start;
+                    scn.set_checkpoint(start);
                     return None;
                 }
 
@@ -111,17 +111,17 @@ pub struct EmitExpression {
 
 impl Parsable for EmitExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::Emit).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let parsed = statement::Statement::parse(scn);
 
         if parsed.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -142,17 +142,17 @@ pub struct ComptimeExpression {
 
 impl Parsable for ComptimeExpression {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         if scn.match_next(scanner::TokenKind::Comptime).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let parsed = statement::Statement::parse(scn);
 
         if parsed.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -175,37 +175,37 @@ pub struct Definition {
 
 impl Parsable for Definition {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let force = scn.match_next(scanner::TokenKind::Force).is_some();
 
         if scn.match_next(scanner::TokenKind::Def).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let name = scn.match_next(scanner::TokenKind::Identifier);
         if name.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let name_str = name.unwrap().value;
 
         if scn.match_next(scanner::TokenKind::Colon).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         let expr = top_expression::TopExpression::parse(scn);
 
         if expr.is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
         if scn.match_next(scanner::TokenKind::SemiColon).is_none() {
-            (scn.slice, scn.pos) = start;
+            scn.set_checkpoint(start);
             return None;
         }
 
@@ -228,7 +228,7 @@ pub struct File {
 
 impl Parsable for File {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let mut nodes = Vec::new();
 

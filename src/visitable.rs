@@ -161,6 +161,7 @@ impl<'a> PartialEq<Value<'a>> for Value<'a> {
         match (self, other) {
             (Value::Class { .. }, Value::Class { .. }) => true,
             (Value::TypeType, Value::TypeType) => true,
+            (Value::VoidType, Value::VoidType) => true,
             (Value::PointerType(a), Value::PointerType(b)) => {
                 let a: Value = a.clone().try_into().unwrap();
 
@@ -294,19 +295,14 @@ impl<'a> Value<'a> {
         match &self {
             Value::Function { output, input, .. } => {
                 let out: Option<BasicTypeEnum> =
-                    match output.borrow_mut().get_type()?.as_ref().clone() {
-                        AnyTypeEnum::PointerType(p) => Some(p.clone().into()),
-                        AnyTypeEnum::IntType(p) => Some(p.clone().into()),
-                        AnyTypeEnum::StructType(p) => Some(p.clone().into()),
-                        AnyTypeEnum::FloatType(p) => Some(p.clone().into()),
-                        AnyTypeEnum::ArrayType(p) => Some(p.clone().into()),
-                        AnyTypeEnum::VoidType(_) => None,
-                        v => todo!("{}", v),
+                    match output.borrow_mut().get_type()?.as_ref().clone().try_into() {
+                        Ok(val) => Some(val),
+                        _ => None,
                     };
                 let mut inp = Vec::new();
 
                 for i in input {
-                    let i: BasicMetadataTypeEnum = match i
+                    let i: BasicMetadataTypeEnum = i
                         .val
                         .clone()
                         .unwrap()
@@ -314,14 +310,8 @@ impl<'a> Value<'a> {
                         .get_type()?
                         .as_ref()
                         .clone()
-                    {
-                        AnyTypeEnum::PointerType(p) => p.clone().into(),
-                        AnyTypeEnum::IntType(p) => p.clone().into(),
-                        AnyTypeEnum::StructType(p) => p.clone().into(),
-                        AnyTypeEnum::FloatType(p) => p.clone().into(),
-                        AnyTypeEnum::ArrayType(p) => p.clone().into(),
-                        v => todo!("{}", v),
-                    };
+                        .try_into()
+                        .unwrap();
                     inp.push(i);
                 }
 
@@ -366,29 +356,23 @@ impl<'a> Value<'a> {
                 let b = &ctx.borrow();
 
                 match child_type.as_ref() {
-                    AnyTypeEnum::IntType(t) => Ok(Box::new(
-                        t.ptr_type(AddressSpace::default()).as_any_type_enum(),
-                    )),
                     AnyTypeEnum::VoidType(_) => Ok(Box::new(
                         b.context
                             .custom_width_int_type(0)
                             .ptr_type(AddressSpace::default())
                             .as_any_type_enum(),
                     )),
-                    AnyTypeEnum::PointerType(t) => Ok(Box::new(
-                        t.ptr_type(AddressSpace::default()).as_any_type_enum(),
-                    )),
-                    AnyTypeEnum::StructType(t) => Ok(Box::new(
-                        t.ptr_type(AddressSpace::default()).as_any_type_enum(),
-                    )),
-                    AnyTypeEnum::ArrayType(t) => Ok(Box::new(
-                        t.ptr_type(AddressSpace::default()).as_any_type_enum(),
-                    )),
-                    AnyTypeEnum::FunctionType(t) => Ok(Box::new(
-                        t.ptr_type(AddressSpace::default()).as_any_type_enum(),
+                    AnyTypeEnum::FunctionType(_) => Ok(Box::new(
+                        b.context
+                            .custom_width_int_type(0)
+                            .ptr_type(AddressSpace::default())
+                            .as_any_type_enum(),
                     )),
                     t => {
-                        todo!("impl {}", t)
+                        let val: BasicTypeEnum = t.clone().try_into().unwrap();
+                        Ok(Box::new(
+                            val.ptr_type(AddressSpace::default()).as_any_type_enum(),
+                        ))
                     }
                 }
             }
@@ -435,31 +419,7 @@ impl<'a> Value<'a> {
 
                             let id = id.borrow().clone();
 
-                            match kind {
-                                AnyTypeEnum::IntType(kind) => {
-                                    props.push((id, kind.as_basic_type_enum()))
-                                }
-                                AnyTypeEnum::FloatType(kind) => {
-                                    props.push((id, kind.as_basic_type_enum()))
-                                }
-                                AnyTypeEnum::ArrayType(kind) => {
-                                    props.push((id, kind.as_basic_type_enum()))
-                                }
-                                AnyTypeEnum::PointerType(kind) => {
-                                    props.push((id, kind.as_basic_type_enum()))
-                                }
-                                AnyTypeEnum::StructType(kind) => {
-                                    props.push((id, kind.as_basic_type_enum()))
-                                }
-                                _ => {
-                                    return Err(Error::BambaError {
-                                        data: ErrorData::InvalidPropError {
-                                            kind: base_kind.clone().try_into()?,
-                                        },
-                                        pos: pos.clone(),
-                                    })
-                                }
-                            }
+                            props.push((id, kind.try_into().unwrap()));
                         }
                         _ => {}
                     }
@@ -676,8 +636,7 @@ impl<'a> Value<'a> {
                                             val.into_pointer_value(),
                                             id.clone().borrow().clone() as u32,
                                             &format!("Anon{}", child),
-                                        )
-                                        .unwrap()
+                                        )?
                                         .into(),
                                 ),
                                 kind: Rc::new(RefCell::new(Node {
@@ -799,21 +758,17 @@ impl<'a> Value<'a> {
                                 _ => {
                                     let arg = tv.get_type()?;
 
-                                    match arg.as_ref() {
-                                        AnyTypeEnum::IntType(ret) => args.push((*ret).into()),
-                                        AnyTypeEnum::StructType(ret) => args.push((*ret).into()),
-                                        AnyTypeEnum::PointerType(ret) => args.push((*ret).into()),
-                                        AnyTypeEnum::FloatType(ret) => args.push((*ret).into()),
-                                        AnyTypeEnum::ArrayType(ret) => args.push((*ret).into()),
+                                    match arg.as_ref().clone().try_into() {
+                                        Ok(val) => args.push(val),
                                         _ => {
                                             return Err(Error::BambaError {
                                                 data: ErrorData::ParamTypeError {
                                                     kind: output.clone().try_into()?,
                                                 },
                                                 pos: output.borrow().pos.clone(),
-                                            })
+                                            });
                                         }
-                                    };
+                                    }
                                 }
                             }
                         }
@@ -1178,19 +1133,9 @@ impl<'a> Node<'a> {
 
                 for param in params.clone() {
                     match param {
-                        Value::Value { val, kind: _ } => match val.as_ref() {
-                            BasicValueEnum::IntValue(arr) => p.push(arr.clone().into()),
-                            BasicValueEnum::ArrayValue(arr) => p.push(arr.clone().into()),
-                            BasicValueEnum::PointerValue(arr) => p.push(arr.clone().into()),
-                            BasicValueEnum::StructValue(arr) => p.push(arr.clone().into()),
-                            BasicValueEnum::FloatValue(arr) => p.push(arr.clone().into()),
-                            _ => {
-                                return Err(Error::BambaError {
-                                    data: ErrorData::NoValueError,
-                                    pos: self.pos.clone(),
-                                });
-                            }
-                        },
+                        Value::Value { val, kind: _ } => {
+                            p.push(val.as_ref().clone().try_into().unwrap())
+                        }
                         _ => {}
                     }
                 }
@@ -1203,11 +1148,11 @@ impl<'a> Node<'a> {
 
                         let bctx = &mut ctx.borrow_mut();
 
-                        let val = bctx.builder.build_call(func_impl.func, &p, "call");
+                        let val = bctx.builder.build_call(func_impl.func, &p, "call")?;
 
-                        val.as_ref().unwrap().set_call_convention(0);
+                        val.set_call_convention(0);
 
-                        let val = val.unwrap().try_as_basic_value().left();
+                        let val = val.try_as_basic_value().left();
 
                         match val {
                             Some(val) => Ok(Value::Value {
@@ -1298,8 +1243,7 @@ impl<'a> Node<'a> {
                                         *i,
                                         ctxb.context.f64_type(),
                                         "floatCast",
-                                    )
-                                    .unwrap()
+                                    )?
                                     .as_basic_value_enum(),
                             ),
                             kind: Rc::new(RefCell::new(self.clone())),
@@ -1307,8 +1251,7 @@ impl<'a> Node<'a> {
                         BasicValueEnum::FloatValue(i) => Ok(Value::Value {
                             val: Rc::new(
                                 ctxb.builder
-                                    .build_float_cast(*i, ctxb.context.f64_type(), "floatCast")
-                                    .unwrap()
+                                    .build_float_cast(*i, ctxb.context.f64_type(), "floatCast")?
                                     .as_basic_value_enum(),
                             ),
                             kind: Rc::new(RefCell::new(self.clone())),
@@ -1371,37 +1314,31 @@ impl<'a> Node<'a> {
                                 let cl = self.clone();
                                 let b = cl.ctx.borrow();
 
-                                b.builder
-                                    .build_int_cast(
-                                        (*v).into(),
-                                        self.get_type()?.as_ref().into_int_type(),
-                                        "int cast",
-                                    )
-                                    .unwrap()
+                                b.builder.build_int_cast(
+                                    (*v).into(),
+                                    self.get_type()?.as_ref().into_int_type(),
+                                    "int cast",
+                                )?
                             }
                             BasicValueEnum::PointerValue(v) => {
                                 let cl = self.clone();
                                 let b = cl.ctx.borrow();
 
-                                b.builder
-                                    .build_ptr_to_int(
-                                        *v,
-                                        self.get_type()?.as_ref().into_int_type(),
-                                        "intCast",
-                                    )
-                                    .unwrap()
+                                b.builder.build_ptr_to_int(
+                                    *v,
+                                    self.get_type()?.as_ref().into_int_type(),
+                                    "intCast",
+                                )?
                             }
                             BasicValueEnum::FloatValue(v) => {
                                 let cl = self.clone();
                                 let b = cl.ctx.borrow();
 
-                                b.builder
-                                    .build_float_to_unsigned_int(
-                                        *v,
-                                        self.get_type()?.as_ref().into_int_type(),
-                                        "intCast",
-                                    )
-                                    .unwrap()
+                                b.builder.build_float_to_unsigned_int(
+                                    *v,
+                                    self.get_type()?.as_ref().into_int_type(),
+                                    "intCast",
+                                )?
                             }
 
                             _ => {
@@ -1449,8 +1386,11 @@ impl<'a> Node<'a> {
                                 .ctx
                                 .borrow()
                                 .builder
-                                .build_int_to_ptr(int.clone(), kind.into_pointer_type(), "inttoptr")
-                                .unwrap()
+                                .build_int_to_ptr(
+                                    int.clone(),
+                                    kind.into_pointer_type(),
+                                    "inttoptr",
+                                )?
                                 .as_basic_value_enum();
 
                             Ok(Value::Value {
@@ -1544,9 +1484,7 @@ impl<'a> Node<'a> {
                     val.into_pointer_value(),
                     &new,
                     "iCall",
-                );
-
-                let result = result.as_ref().unwrap();
+                )?;
 
                 let Value::Function { output, .. }: Value = kind.clone().try_into()? else {
                     return Err(Error::BambaError {

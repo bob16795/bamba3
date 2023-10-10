@@ -6,7 +6,8 @@ force def main: fn[] -> i32 {
     
     s.append("World!");
 
-    if (!Bool(class {def a: i32; def b: 100;}.a == i32)) {
+
+    if (!(class {def a: i32; def b: 100;}.a == i32)) {
         String.println(s);
         return i32(1);
     } else {
@@ -20,6 +21,4 @@ force def main: fn[] -> i32 {
 
         return i32(0);
     }
-
-    return i32(0);
 };

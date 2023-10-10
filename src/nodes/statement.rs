@@ -28,7 +28,7 @@ pub struct Statement {
 
 impl Parsable for Statement {
     fn parse(scn: &mut scanner::Scanner) -> Option<Self> {
-        let start = (scn.slice.clone(), scn.pos.clone());
+        let start = scn.get_checkpoint();
 
         let parsed = expression_statement::ExpressionStatement::parse(scn);
         if parsed.is_some() {
@@ -102,7 +102,7 @@ impl Parsable for Statement {
             });
         }
 
-        (scn.slice, scn.pos) = start;
+        scn.set_checkpoint(start);
         None
     }
 }
