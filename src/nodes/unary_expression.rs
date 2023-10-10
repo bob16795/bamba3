@@ -90,10 +90,25 @@ impl Parsable for UnaryExpression {
 impl<'a> Visitable<'a> for UnaryExpression {
     fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         match self.child.as_ref() {
-            UnaryExpressionChild::Not(_un) => Err(Error::BambaError {
-                data: ErrorData::TodoError("visit not expression".to_string()),
-                pos: self.pos.clone(),
-            }),
+            UnaryExpressionChild::Not(un) => {
+                let child = un.visit(ctx.clone())?;
+                child.borrow_mut().visit()?;
+
+                match &child.clone().try_into()? {
+                    Value::ConstBool(v) => Ok(Rc::new(RefCell::new(Node {
+                        ctx: ctx.clone(),
+                        pos: self.pos.clone(),
+                        value: NodeV::Visited(Value::ConstBool(!v)),
+                    }))),
+                    v => Err(Error::BambaError {
+                        data: ErrorData::VisitUnaryOpError {
+                            kind: "not".to_string(),
+                            a: v.clone(),
+                        },
+                        pos: self.pos.clone(),
+                    }),
+                }
+            }
             UnaryExpressionChild::Ref(_un) => Err(Error::BambaError {
                 data: ErrorData::TodoError("visit ref expression".to_string()),
                 pos: self.pos.clone(),
@@ -174,6 +189,7 @@ impl<'a> Visitable<'a> for UnaryExpression {
                 let child = &un.emit(ctx.clone())?;
                 match child {
                     Some(val) => match val {
+                        Value::ConstBool(v) => Ok(Some(Value::ConstBool(!v))),
                         Value::Value { val: vval, kind } => match kind.clone().try_into()? {
                             Value::IntType { size: _, signed: _ } => {
                                 let b = ctx.borrow();

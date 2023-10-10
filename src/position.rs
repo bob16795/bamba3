@@ -45,11 +45,18 @@ impl Position {
 
 impl fmt::Display for FileRange {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let text = &std::fs::read_to_string(self.start.file.clone()).unwrap()
-            [self.start.pos..self.end.pos];
+        let text = &std::fs::read_to_string(self.start.file.clone())
+            .unwrap()
+            .split("\n")
+            .collect::<Vec<_>>()[self.start.line..=self.end.line]
+            .iter()
+            .enumerate()
+            .map(|(x, y)| format!("{} |{}", self.start.line + x + 1, y))
+            .collect::<Vec<_>>()
+            .join("\n");
         write!(
             f,
-            "--- {}<{}:{}>-<{}:{}>\n{}\n---",
+            "--> {}<{}:{}>-<{}:{}>\n\n{}",
             self.start.file, self.start.line, self.start.col, self.end.line, self.end.col, text
         )
     }

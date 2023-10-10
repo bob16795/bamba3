@@ -60,6 +60,8 @@ pub enum ErrorData<'a> {
     InvalidPropError { kind: Value<'a> },
     #[error("Code after return statement")]
     CodeAfterReturnError,
+    #[error("{value}")]
+    ErrorFunctionCall { value: String },
 
     #[error("{0} not yet implemented")]
     TodoError(String),
@@ -67,6 +69,6 @@ pub enum ErrorData<'a> {
 
 #[derive(Error, Debug)]
 pub enum Error<'a> {
-    #[error("Error: {data}\n{pos}")]
+    #[error("Error: {data}\n\n{pos}\n")]
     BambaError { pos: FileRange, data: ErrorData<'a> },
 }

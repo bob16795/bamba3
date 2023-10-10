@@ -554,6 +554,24 @@ impl<'a> Visitable<'a> for CallExpression {
 
                         Ok(Some(p0.try_into()?))
                     }
+                    Value::BuiltinFunc(BuiltinFunc::Error) => {
+                        let p0 = params[0].visit(ctx.clone())?;
+
+                        let value = match p0.try_into()? {
+                            Value::ConstString(s) => s,
+                            kind => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind },
+                                    pos: self.pos.clone(),
+                                })
+                            }
+                        };
+
+                        return Err(Error::BambaError {
+                            data: ErrorData::ErrorFunctionCall { value },
+                            pos: self.pos.clone(),
+                        });
+                    }
                     Value::BuiltinFunc(BuiltinFunc::AddDef) => {
                         let p0 = params[0].visit(ctx.clone())?;
 

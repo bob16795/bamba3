@@ -89,6 +89,7 @@ pub enum BuiltinFunc {
     GetProp,
     SetName,
     Print,
+    Error,
 }
 
 #[derive(Debug, Clone)]
@@ -1501,6 +1502,24 @@ impl<'a> Node<'a> {
                     });
                 };
 
+                if let Value::Class { children, .. } = kind.clone().try_into()? {
+                    if let Some(func) = children.borrow().get("()") {
+                        let mut new_params: Vec<Value> = vec![self.try_into()?];
+
+                        new_params.append(params);
+
+                        return func.borrow_mut().emit_call(&mut new_params);
+                    } else {
+                        return Err(Error::BambaError {
+                            data: ErrorData::NoChildError {
+                                child: "()".to_string(),
+                                parent: kind.clone().try_into()?,
+                            },
+                            pos: self.pos.clone(),
+                        });
+                    }
+                };
+
                 let mut new = Vec::new();
 
                 for p in params {
@@ -1970,6 +1989,13 @@ pub fn builtin_type<'a>(
             return Some(Rc::new(RefCell::new(Node {
                 pos: pos.clone(),
                 value: NodeV::Visited(Value::BuiltinFunc(BuiltinFunc::Print)),
+                ctx,
+            })));
+        }
+        "@ERROR" => {
+            return Some(Rc::new(RefCell::new(Node {
+                pos: pos.clone(),
+                value: NodeV::Visited(Value::BuiltinFunc(BuiltinFunc::Error)),
                 ctx,
             })));
         }
