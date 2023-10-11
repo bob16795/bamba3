@@ -1,0 +1,39 @@
+def SinglyLinkedList: fn[T] -> Class {
+    return class {
+        def Node: class {
+            def data: prop T;
+            def next: prop *Void;
+        };
+        
+        def head: prop *Self.Node;
+        def tail: prop *Self.Node;
+
+        def init: fn[] -> Self {
+            def result: new Self;
+
+            result.tail = null;
+            result.head = null;
+
+            return *result;
+        };
+
+        def append: fn[self: *Self, data: T] -> Void {
+            if (*self.head == (*Node)(null)) {
+                self.head = malloc(Node.SIZE);
+                (*self.head).next = null;
+                (*self.head).data = data;
+            } else {
+                def current: new *Self.Node = *self.head;
+
+                while (*(*current).next != (*Void)(null))
+                    current = *(*current).next;
+                
+                (*current).next = malloc(Node.SIZE);
+                (*Self.Node)(*(*current).next).next = null;
+                (*Self.Node)(*(*current).next).data = data;
+            }
+
+            return;
+        };
+    };
+};

@@ -1,0 +1,102 @@
+def LinkedList: import "std/types/linkedlists.bam".SinglyLinkedList;
+def Hash: import "std/algorithm/hash.bam".Hash;
+
+def HashMap: fn[K, V] -> Class {
+    return class {
+        def Entry: class {
+            def key: prop K;
+            def value: prop V;
+        };
+        
+        def hashFn: Hash.getHash(K);
+
+        def EntryElem: LinkedList(Entry);
+        def entrys: prop EntryElem[256];
+
+        def put: fn[self: *Self, key: K, value: V] -> Void {
+            def entryVal: Entry($[key, value]);
+
+            def idx: u8(hashFn(key) % u32(128));
+
+            def entry: self.entrys[usize(idx)];
+
+            if (*entry.head == (*EntryElem)(null)) {
+                entry.head = malloc(EntryElem.Node.SIZE);
+                (*entry.head).next = null;
+                (*entry.head).data = entryVal;
+            } else {
+                def current: new *EntryElem.Node = *entry.head;
+
+                while (*(*current).next != (*Void)(null)) {
+                    if ((*current).data.key == key) {
+                        (*current).data = entryVal;
+                        return;
+                    }
+                    current = *(*current).next;
+                }
+                
+                if ((*current).data.key == key) {
+                    (*current).data = entryVal;
+                    return;
+                }
+                
+                (*current).next = malloc(EntryElem.Node.SIZE);
+                (*EntryElem.Node)(*(*current).next).next = null;
+                (*EntryElem.Node)(*(*current).next).data = entryVal;
+            }
+
+            return;
+        };
+
+        def get: fn[self: *Self, key: K] -> *V {
+            def idx: u8(hashFn(key) % u32(128));
+
+            def entry: self.entrys[usize(idx)];
+
+            if (*entry.head == (*EntryElem)(null)) {
+                return (*V)(null);
+            } else {
+                def current: new *EntryElem.Node = *entry.head;
+
+                while (*current != (*EntryElem.Node)(null)) {
+                    if ((*current).data.key == key) {
+                        return (*current).data.value;
+                    }
+
+                    current = *(*current).next;
+                }
+    
+                return (*V)(null);
+            }
+        };
+
+        def print: fn[self: *Self] -> Void {
+            def i: new usize = usize(0);
+                
+            printf("{\n", *i);
+
+            while (*i < usize(256)) {
+                def entry: self.entrys[*i];
+                def current: new *EntryElem.Node = *entry.head;
+
+                while (*current != (*EntryElem.Node)(null)) {
+                    printf("  '", *(*current).data.value);
+                    (*current).data.key.print();
+                    printf("': %d,\n", *(*current).data.value);
+                    current = *(*current).next;
+                }
+                
+                i = *i + usize(1);
+            }
+            printf("}\n", *i);
+
+            return;
+        };
+
+        def init: fn[] -> Self {
+            def result: new Self = null;
+
+            return *result;
+        };
+    };
+};

@@ -1,0 +1,25 @@
+def Slice: import "std/types/slice.bam".Slice;
+
+def realloc: import "std/types.bam".malloc;
+
+def Collect: fn[T] -> (fn[] -> *u8[]) {
+    def SliceT: Slice(T.Item);
+
+    return fn[base: *T] -> SliceT {
+        def result: new SliceT;
+        result.ptr = null;
+        result.len = usize(0);
+
+        def sp: new T.Item;
+
+        while (base.hasNext()) {
+            sp = base.next();
+            result.ptr = realloc(*result.ptr, (*result.len + usize(1)) * T.Item.SIZE);
+            result[*result.len] = *sp; 
+
+            result.len = *result.len + usize(1);
+        }
+
+        return *result;
+    }; 
+};

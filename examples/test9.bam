@@ -1,0 +1,40 @@
+def std: import "std/std.bam";
+
+def String: std.Types.String;
+
+def StringHash: std.Algorithm.Hash.getHash(String);
+def StringList: comptime {
+    return std.Types.SinglyLinkedList(String);
+};
+def StringHashMap: std.Types.HashMap(String, i32);
+
+def printf: std.Types.printf;
+
+force def main: fn[] -> i32 {
+    def tmp: new String = String.from("hello");
+
+    def hash: StringHash(*tmp);
+
+    printf("hash('hello') = %u\n", hash);
+
+    def list: new StringList = StringList.init();
+    list.append(i32(10));
+    list.append(i32(11));
+
+    printf("data[0] = %d\n", *(*list.head).data);
+    printf("data[1] = %d\n", *(*StringList.Node)(*(*list.head).next).data);
+
+    def hashMap: new StringHashMap = StringHashMap.init();
+
+    hashMap.put(String.from("lolevreq"), i32(12));
+    hashMap.put(String.from("pooevreq"), i32(10));
+    hashMap.put(String.from("ollfjevreq"), i32(10));
+    hashMap.put(String.from("abs"), i32(120));
+    hashMap.put(String.from("fdsa"), i32(100));
+    hashMap.put(String.from("rewqhjuvfeq"), i32(100));
+
+    printf("hashMap = ");
+    hashMap.print();
+
+    return i32(0);
+};

@@ -1,0 +1,25 @@
+def std: import "std/std.bam";
+
+def String: std.Types.String;
+def printf: std.Types.printf;
+
+def collectSplit: std.Algorithm.Collect(String.Split);
+def CollectSliceT: std.Types.Slice(String.Split.Item);
+
+force def main: fn[] -> i32 {
+    def s: new String = String.from("Hello World!");
+    def split: new String.Split = s.split(" ");
+    def res: new CollectSliceT = collectSplit(split);
+
+    def i: new usize = usize(0);
+
+    while (*i < *res.len) {
+        def b: new usize;
+        
+        printf("%.*s\n", *res[*i].len, *res[*i].ptr);
+
+        i = *i + usize(1);
+    }
+
+    return i32(0);
+};
