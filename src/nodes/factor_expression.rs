@@ -12,6 +12,7 @@ pub enum FactorExpressionChild {
     Mod(unary_expression::UnaryExpression, FactorExpression),
     Div(unary_expression::UnaryExpression, FactorExpression),
     Mul(unary_expression::UnaryExpression, FactorExpression),
+    Xor(unary_expression::UnaryExpression, FactorExpression),
     UnaryExpression(unary_expression::UnaryExpression),
 }
 
@@ -77,6 +78,21 @@ impl Parsable for FactorExpression {
             });
         }
 
+        if scn.match_next(scanner::TokenKind::Caret).is_some() {
+            let next = Self::parse(scn);
+
+            if next.is_none() {
+                scn.set_checkpoint(start);
+                return None;
+            }
+
+            return Some(FactorExpression {
+                pos: (start.1..scn.pos.clone()).into(),
+
+                child: Box::new(FactorExpressionChild::Xor(first.unwrap(), next.unwrap())),
+            });
+        }
+
         Some(FactorExpression {
             pos: (start.1..scn.pos.clone()).into(),
 
@@ -125,6 +141,28 @@ impl<'a> Visitable<'a> for FactorExpression {
                     _ => Err(Error::BambaError {
                         data: ErrorData::VisitBinaryOpError {
                             kind: "divide".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
+                    }),
+                }
+            }
+            FactorExpressionChild::Xor(l, r) => {
+                let a: Value = l.visit(ctx.clone())?.try_into()?;
+                let b: Value = r.visit(ctx.clone())?.try_into()?;
+
+                match (a.clone(), b.clone()) {
+                    (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Rc::new(RefCell::new(Node {
+                        pos: self.pos.clone(),
+                        ctx: ctx.clone(),
+
+                        value: NodeV::Visited(Value::ConstInt(a ^ b)),
+                    }))),
+
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::VisitBinaryOpError {
+                            kind: "xor".to_string(),
                             a,
                             b,
                         },
@@ -424,6 +462,87 @@ impl<'a> Visitable<'a> for FactorExpression {
                             _ => Err(Error::BambaError {
                                 data: ErrorData::EmitBinaryOpError {
                                     kind: "mod".to_string(),
+                                    a,
+                                    b,
+                                },
+                                pos: self.pos.clone(),
+                            }),
+                        }
+                    }
+
+                    _ => Err(Error::BambaError {
+                        data: ErrorData::EmitBinaryOpError {
+                            kind: "mod".to_string(),
+                            a,
+                            b,
+                        },
+                        pos: self.pos.clone(),
+                    }),
+                }
+            }
+            FactorExpressionChild::Xor(l, r) => {
+                let a = l.emit(ctx.clone())?.unwrap();
+                let b = r.emit(ctx.clone())?.unwrap();
+
+                match (a.clone(), b.clone()) {
+                    (Value::ConstInt(a), Value::ConstInt(b)) => Ok(Some(Value::ConstInt(a ^ b))),
+                    (
+                        Value::Value {
+                            val: av,
+                            kind: a_type,
+                        },
+                        Value::Value {
+                            val: bv,
+                            kind: b_type,
+                        },
+                    ) => {
+                        let a_type = a_type.try_into()?;
+                        let b_type = b_type.try_into()?;
+
+                        match (&a_type, &b_type) {
+                            (
+                                Value::IntType {
+                                    size: asize,
+                                    signed: asign,
+                                },
+                                Value::IntType {
+                                    size: bsize,
+                                    signed: bsign,
+                                },
+                            ) => {
+                                if asize != bsize || asign != bsign {
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::EmitBinaryOpError {
+                                            kind: "mod".to_string(),
+                                            a,
+                                            b,
+                                        },
+                                        pos: self.pos.clone(),
+                                    });
+                                }
+
+                                let br = ctx.borrow();
+
+                                let result = br.builder.build_xor(
+                                    av.into_int_value(),
+                                    bv.into_int_value(),
+                                    "xor",
+                                );
+
+                                Ok(Some(Value::Value {
+                                    val: Rc::new(result.unwrap().into()),
+                                    kind: Rc::new(RefCell::new(Node {
+                                        pos: self.pos.clone(),
+                                        ctx: ctx.clone(),
+
+                                        value: NodeV::Visited(a_type.clone()),
+                                    })),
+                                }))
+                            }
+
+                            _ => Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "xor".to_string(),
                                     a,
                                     b,
                                 },

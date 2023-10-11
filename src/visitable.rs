@@ -27,7 +27,7 @@ pub trait Visitable<'a> {
 
 #[derive(Debug, Clone)]
 pub struct NodeContext<'ctx> {
-    pub locals: Rc<RefCell<HashMap<String, Rc<RefCell<Node<'ctx>>>>>>,
+    pub locals: Rc<RefCell<HashMap<String, (Rc<RefCell<u32>>, Rc<RefCell<Node<'ctx>>>)>>>,
     pub self_value: Option<Rc<RefCell<Node<'ctx>>>>,
     pub context: Rc<&'ctx Context>,
     pub module: Rc<Module<'ctx>>,
@@ -49,11 +49,10 @@ impl<'a> NodeContext<'a> {
         let mut new_loc = HashMap::new();
 
         for (name, value) in self.locals.borrow_mut().iter() {
-            match value.try_borrow_mut() {
-                Ok(value) => {
-                    new_loc.insert(name.clone(), Rc::new(RefCell::new(value.clone())));
+            match value {
+                (a, value) => {
+                    new_loc.insert(name.clone(), (a.clone(), value.clone()));
                 }
-                _ => {}
             }
         }
 
@@ -113,7 +112,7 @@ pub enum Value<'a> {
         ctx: Rc<RefCell<NodeContext<'a>>>,
     },
     Class {
-        children: Rc<RefCell<HashMap<String, Rc<RefCell<Node<'a>>>>>>,
+        children: Rc<RefCell<HashMap<String, (Rc<RefCell<u32>>, Rc<RefCell<Node<'a>>>)>>>,
 
         kind: Rc<RefCell<Option<StructType<'a>>>>,
 
@@ -162,6 +161,7 @@ impl<'a> PartialEq<Value<'a>> for Value<'a> {
             (Value::Class { .. }, Value::Class { .. }) => true,
             (Value::TypeType, Value::TypeType) => true,
             (Value::VoidType, Value::VoidType) => true,
+            (Value::ClassType, Value::ClassType) => true,
             (Value::PointerType(a), Value::PointerType(b)) => {
                 let a: Value = a.clone().try_into().unwrap();
 
@@ -228,17 +228,9 @@ impl fmt::Display for Value<'_> {
                 name,
             } => write!(
                 f,
-                "Class named {} with (\n  {}\n)",
+                "Class named {} with {} children",
                 name,
-                &children
-                    .borrow()
-                    .clone()
-                    .iter()
-                    .fold(String::new(), |acc, num| acc
-                        + "\n  "
-                        + &format!("{}: {}", &num.0, &num.1.borrow())
-                            .to_string()
-                            .replace("\n", "\n  "))[3..],
+                &children.borrow().clone().len(),
             ),
             Value::Tuple { children } => {
                 write!(
@@ -394,7 +386,7 @@ impl<'a> Value<'a> {
 
                 for (_name, child) in children.borrow_mut().iter_mut() {
                     let child = &mut {
-                        let child = child.try_borrow_mut();
+                        let child = child.1.try_borrow_mut();
                         if child.is_err() {
                             continue;
                         }
@@ -562,7 +554,7 @@ impl<'a> Value<'a> {
                         let res = node.clone();
                         drop(children);
 
-                        Ok(res.try_into()?)
+                        Ok(res.1.try_into()?)
                     }
                     None => {
                         return Err(Error::BambaError {
@@ -598,9 +590,9 @@ impl<'a> Value<'a> {
                                 children.unwrap().clone()
                             };
 
-                            if let Value::Function { .. } = children.clone().try_into()? {
+                            if let Value::Function { .. } = children.1.clone().try_into()? {
                                 return Ok(Value::Method {
-                                    func: children.clone().into(),
+                                    func: children.1.clone().into(),
                                     parent: Rc::new(RefCell::new(Node {
                                         pos: pos.clone(),
                                         ctx: ctx.clone(),
@@ -612,7 +604,7 @@ impl<'a> Value<'a> {
                             let Value::Prop {
                                 id,
                                 kind: prop_kind,
-                            } = children.clone().try_into()?
+                            } = children.1.clone().try_into()?
                             else {
                                 return Err(Error::BambaError {
                                     data: ErrorData::NoChildError {
@@ -849,14 +841,17 @@ impl<'a> Value<'a> {
 
                             ctx_borrowed.locals.borrow_mut().insert(
                                 input.name.clone(),
-                                Rc::new(RefCell::new(Node {
-                                    pos: input.pos.clone(),
-                                    ctx: ctx.clone(),
-                                    value: NodeV::Visited(Value::Value {
-                                        val: p.into(),
-                                        kind: input.val.clone().unwrap(),
-                                    }),
-                                })),
+                                (
+                                    Rc::new(RefCell::new(1)),
+                                    Rc::new(RefCell::new(Node {
+                                        pos: input.pos.clone(),
+                                        ctx: ctx.clone(),
+                                        value: NodeV::Visited(Value::Value {
+                                            val: p.into(),
+                                            kind: input.val.clone().unwrap(),
+                                        }),
+                                    })),
+                                ),
                             );
 
                             i += 1;
@@ -1004,7 +999,7 @@ impl<'a> Node<'a> {
 
                 for (_, child) in children.borrow_mut().iter_mut() {
                     let child = &mut {
-                        let child = child.try_borrow_mut();
+                        let child = child.1.try_borrow_mut();
                         if child.is_err() {
                             continue;
                         }
@@ -1030,7 +1025,7 @@ impl<'a> Node<'a> {
 
                 for (name, child) in children.borrow_mut().iter_mut() {
                     let child = &mut {
-                        let child = child.try_borrow_mut();
+                        let child = child.1.try_borrow_mut();
                         if child.is_err() {
                             continue;
                         }
@@ -1448,7 +1443,7 @@ impl<'a> Node<'a> {
 
                         new_params.append(params);
 
-                        return func.borrow_mut().emit_call(&mut new_params);
+                        return func.1.borrow_mut().emit_call(&mut new_params);
                     } else {
                         return Err(Error::BambaError {
                             data: ErrorData::NoChildError {
@@ -1552,11 +1547,10 @@ impl<'a> Node<'a> {
 
                 let mut idx = 0;
                 for i in input {
-                    sub_ctx
-                        .borrow_mut()
-                        .locals
-                        .borrow_mut()
-                        .insert(i.name.clone(), params[idx].clone());
+                    sub_ctx.borrow_mut().locals.borrow_mut().insert(
+                        i.name.clone(),
+                        (Rc::new(RefCell::new(1)), params[idx].clone()),
+                    );
                     idx += 1;
                 }
 
@@ -1659,12 +1653,15 @@ impl<'a> Node<'a> {
             if add {
                 sub_ctx.borrow().locals.borrow_mut().insert(
                     input.name.clone(),
-                    Rc::new(RefCell::new(Node {
-                        pos: self.pos.clone(),
-                        ctx: sub_ctx.clone(),
+                    (
+                        Rc::new(RefCell::new(1)),
+                        Rc::new(RefCell::new(Node {
+                            pos: self.pos.clone(),
+                            ctx: sub_ctx.clone(),
 
-                        value: NodeV::Visited(p.unwrap().clone()),
-                    })),
+                            value: NodeV::Visited(p.unwrap().clone()),
+                        })),
+                    ),
                 );
                 name.extend(p.unwrap().get_name());
             }
@@ -1730,14 +1727,17 @@ impl<'a> Node<'a> {
                                 Some(Value::Value { .. }) | None => {
                                     ctx_borrowed.locals.borrow_mut().insert(
                                         input.name.clone(),
-                                        Rc::new(RefCell::new(Node {
-                                            pos: input.pos.clone(),
-                                            ctx: sub_ctx.clone(),
-                                            value: NodeV::Visited(Value::Value {
-                                                val: func.get_params()[i].into(),
-                                                kind: input.val.clone().unwrap(),
-                                            }),
-                                        })),
+                                        (
+                                            Rc::new(RefCell::new(1)),
+                                            Rc::new(RefCell::new(Node {
+                                                pos: input.pos.clone(),
+                                                ctx: sub_ctx.clone(),
+                                                value: NodeV::Visited(Value::Value {
+                                                    val: func.get_params()[i].into(),
+                                                    kind: input.val.clone().unwrap(),
+                                                }),
+                                            })),
+                                        ),
                                     );
 
                                     i += 1;
@@ -1747,11 +1747,14 @@ impl<'a> Node<'a> {
                         } else {
                             ctx_borrowed.locals.borrow_mut().insert(
                                 input.name.clone(),
-                                Rc::new(RefCell::new(Node {
-                                    pos: input.pos.clone(),
-                                    ctx: sub_ctx.clone(),
-                                    value: NodeV::Visited(p.unwrap().clone()),
-                                })),
+                                (
+                                    Rc::new(RefCell::new(1)),
+                                    Rc::new(RefCell::new(Node {
+                                        pos: input.pos.clone(),
+                                        ctx: sub_ctx.clone(),
+                                        value: NodeV::Visited(p.unwrap().clone()),
+                                    })),
+                                ),
                             );
                         }
                     }
@@ -1994,7 +1997,10 @@ pub fn builtin_type<'a>(
     let val = b.locals.borrow();
     let val = val.get(&name);
 
-    val.cloned()
+    match val {
+        Some(v) => Some(v.1.clone()),
+        None => None,
+    }
 }
 
 impl<'a> Visitable<'a> for parser::File {
@@ -2011,7 +2017,7 @@ impl<'a> Visitable<'a> for parser::File {
             ctx.borrow_mut()
                 .locals
                 .borrow_mut()
-                .insert(def.name.clone(), b);
+                .insert(def.name.clone(), (Rc::new(RefCell::new(1)), b));
 
             if def.force {
                 to_visit.push(def.name.clone());
@@ -2027,7 +2033,7 @@ impl<'a> Visitable<'a> for parser::File {
                 b.get_mut(&item).unwrap().clone()
             };
 
-            let b = &mut val.borrow_mut();
+            let b = &mut val.1.borrow_mut();
 
             b.emit()?;
         }

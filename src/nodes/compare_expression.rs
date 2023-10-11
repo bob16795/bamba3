@@ -93,6 +93,40 @@ impl<'a> CompareExpression {
                             })),
                         }))
                     }
+                    (Value::PointerType(atype), Value::Class { children, .. }) => {
+                        let atv: Value = atype.clone().try_into()?;
+                        if atv != b_type {
+                            return Err(Error::BambaError {
+                                data: ErrorData::EmitBinaryOpError {
+                                    kind: "compare".to_string(),
+                                    a: a.clone(),
+                                    b: b.clone(),
+                                },
+                                pos: self.pos.clone(),
+                            });
+                        }
+
+                        let func = {
+                            let children = children.borrow();
+
+                            match children.get("==") {
+                                Some(v) => v.clone(),
+                                None => {
+                                    return Err(Error::BambaError {
+                                        data: ErrorData::NoChildError {
+                                            child: "==".to_string(),
+                                            parent: atype.clone().try_into()?,
+                                        },
+                                        pos: self.pos.clone(),
+                                    })
+                                }
+                            }
+                        };
+
+                        let mut p = vec![a.clone().into(), b.clone().into()];
+
+                        return Ok(Some(func.1.borrow().clone().emit_call(&mut p)?));
+                    }
                     (Value::PointerType(atype), Value::PointerType(btype)) => {
                         let btype: Value = btype.clone().try_into()?;
                         if btype != atype.clone().try_into()? {
@@ -290,14 +324,11 @@ impl<'a> Visitable<'a> for CompareExpression {
                         value: NodeV::Visited(Value::ConstBool(a != b)),
                     }))),
 
-                    _ => Err(Error::BambaError {
-                        data: ErrorData::VisitBinaryOpError {
-                            kind: "not equals".to_string(),
-                            a,
-                            b,
-                        },
+                    (a, b) => Ok(Rc::new(RefCell::new(Node {
                         pos: self.pos.clone(),
-                    }),
+                        ctx: ctx.clone(),
+                        value: NodeV::Visited(Value::ConstBool(a != b)),
+                    }))),
                 }
             }
             CompareExpressionChild::Eql(l, r) => {
@@ -312,14 +343,11 @@ impl<'a> Visitable<'a> for CompareExpression {
                         value: NodeV::Visited(Value::ConstBool(a == b)),
                     }))),
 
-                    _ => Err(Error::BambaError {
-                        data: ErrorData::VisitBinaryOpError {
-                            kind: "equals".to_string(),
-                            a,
-                            b,
-                        },
+                    (a, b) => Ok(Rc::new(RefCell::new(Node {
                         pos: self.pos.clone(),
-                    }),
+                        ctx: ctx.clone(),
+                        value: NodeV::Visited(Value::ConstBool(a == b)),
+                    }))),
                 }
             }
             CompareExpressionChild::Greater(l, r) => {

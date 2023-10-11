@@ -119,7 +119,9 @@ impl<'a> Visitable<'a> for Statement {
                 val.borrow_mut().set_name(ex.name.clone())?;
 
                 let locals = &mut ctx.borrow_mut().locals;
-                locals.borrow_mut().insert(ex.name.clone(), val.clone());
+                locals
+                    .borrow_mut()
+                    .insert(ex.name.clone(), (Rc::new(RefCell::new(1)), val.clone()));
 
                 Ok(Rc::new(RefCell::new(Node {
                     pos: self.pos.clone(),
@@ -151,9 +153,10 @@ impl<'a> Visitable<'a> for Statement {
                 res.set_name(ex.name.clone())?;
 
                 let locals = &mut ctx.borrow_mut().locals;
-                locals
-                    .borrow_mut()
-                    .insert(ex.name.clone(), Rc::new(RefCell::new(res)));
+                locals.borrow_mut().insert(
+                    ex.name.clone(),
+                    (Rc::new(RefCell::new(1)), Rc::new(RefCell::new(res))),
+                );
 
                 Ok(None)
             }

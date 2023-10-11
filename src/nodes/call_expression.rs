@@ -312,12 +312,15 @@ impl<'a> Visitable<'a> for CallExpression {
 
                         children.borrow_mut().insert(
                             name.clone(),
-                            Rc::new(RefCell::new(Node {
-                                ctx: ctx.clone(),
-                                pos: self.pos.clone(),
+                            (
+                                Rc::new(RefCell::new(1)),
+                                Rc::new(RefCell::new(Node {
+                                    ctx: ctx.clone(),
+                                    pos: self.pos.clone(),
 
-                                value: NodeV::Visited(p2.clone().unwrap()),
-                            })),
+                                    value: NodeV::Visited(p2.clone().unwrap()),
+                                })),
+                            ),
                         );
 
                         match p2.unwrap() {
@@ -415,11 +418,15 @@ impl<'a> Visitable<'a> for CallExpression {
                             size: _,
                         } = kind_val.clone().try_into()?
                         else {
-                            let Value::Class { children, name, .. } =
-                                kind_val.clone().try_into()?
+                            let Value::Class {
+                                children, name: _, ..
+                            } = kind_val.clone().try_into()?
                             else {
                                 let v: Value = kind_val.try_into()?;
-                                todo!("{}", v);
+                                return Err(Error::BambaError {
+                                    data: ErrorData::TodoError(format!("index for {}", v)),
+                                    pos: self.pos.clone(),
+                                });
                             };
 
                             let func = {
@@ -430,7 +437,7 @@ impl<'a> Visitable<'a> for CallExpression {
                                     None => {
                                         return Err(Error::BambaError {
                                             data: ErrorData::NoChildError {
-                                                child: name,
+                                                child: "".to_string(),
                                                 parent: kind_val.try_into()?,
                                             },
                                             pos: self.pos.clone(),
@@ -446,7 +453,7 @@ impl<'a> Visitable<'a> for CallExpression {
 
                             drop(cb);
 
-                            return Ok(Some(func.borrow().clone().emit_call(&mut p)?));
+                            return Ok(Some(func.1.borrow().clone().emit_call(&mut p)?));
                         };
 
                         let val: BasicValueEnum = unsafe {
@@ -601,12 +608,15 @@ impl<'a> Visitable<'a> for CallExpression {
 
                         children.borrow_mut().insert(
                             name.clone(),
-                            Rc::new(RefCell::new(Node {
-                                ctx: ctx.clone(),
-                                pos: self.pos.clone(),
+                            (
+                                Rc::new(RefCell::new(1)),
+                                Rc::new(RefCell::new(Node {
+                                    ctx: ctx.clone(),
+                                    pos: self.pos.clone(),
 
-                                value: NodeV::Visited(p2.clone()),
-                            })),
+                                    value: NodeV::Visited(p2.clone()),
+                                })),
+                            ),
                         );
 
                         match p2.into() {

@@ -1,3 +1,5 @@
+def Hash: import "std/algorithm/hash.bam".Hash;
+
 def ArrayList: fn[T] -> Class {
     return class {
         def SliceT: Slice(T);
@@ -36,6 +38,8 @@ def ArrayList: fn[T] -> Class {
 
             return;
         };        
+
+        def push: Self.append;
 
         def pop: fn[self: *Self] -> T {
             self.items.len = *self.items.len - usize(1);
@@ -78,8 +82,28 @@ def ArrayList: fn[T] -> Class {
             return *result;
         };
         
+        def len: fn[self: *Self] -> usize {
+            return *self.items.len;
+        };
+        
         def `[]`: fn[self: *Self, idx: usize] -> *T {
             return self.items[idx];
+        };
+
+        def hashFn: Hash.getHash(T);
+
+        def hash: fn[self: *Self] -> i32 {
+            def result: new i32 = i32(0);
+            def i: new usize = usize(0);
+
+            while (*i < self.len()) { 
+                result = Hash.mix(*result, hashFn(*self[*i]));
+                i = *i + usize(1);
+            }
+
+            result = Hash.finish(*result);
+
+            return *result;
         };
     };
 };

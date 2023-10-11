@@ -195,13 +195,13 @@ impl<'a> Visitable<'a> for PrimaryExpression {
                     }));
 
                     let cb = &mut children.borrow_mut();
-                    cb.insert(def.name.clone(), b.clone());
+                    cb.insert(def.name.clone(), (Rc::new(RefCell::new(1)), b.clone()));
 
                     sub_ctx
                         .borrow_mut()
                         .locals
                         .borrow_mut()
-                        .insert(def.name.clone(), b);
+                        .insert(def.name.clone(), (Rc::new(RefCell::new(1)), b));
 
                     if def.force {
                         to_visit.push(def.name.clone());
@@ -216,7 +216,7 @@ impl<'a> Visitable<'a> for PrimaryExpression {
                         b.get_mut(&item).unwrap().clone()
                     };
 
-                    val.borrow_mut().visit()?;
+                    val.1.borrow_mut().visit()?;
                 }
 
                 Ok(res)

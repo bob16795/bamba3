@@ -81,7 +81,7 @@ fn main() -> Result<(), String> {
 
             let opt = OptimizationLevel::Aggressive;
             let reloc = RelocMode::Default;
-            let model = CodeModel::Large;
+            let model = CodeModel::Default;
             let target = Target::from_name("x86-64").unwrap();
             let target_machine = target
                 .create_target_machine(

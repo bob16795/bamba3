@@ -67,6 +67,12 @@ impl<'a> Visitable<'a> for OrExpression {
 
                         value: NodeV::Visited(Value::ConstInt(a | b)),
                     }))),
+                    (Value::ConstBool(a), Value::ConstBool(b)) => Ok(Rc::new(RefCell::new(Node {
+                        pos: self.pos.clone(),
+                        ctx: ctx.clone(),
+
+                        value: NodeV::Visited(Value::ConstBool(a || b)),
+                    }))),
 
                     _ => Err(Error::BambaError {
                         data: ErrorData::VisitBinaryOpError {

@@ -78,10 +78,10 @@ impl<'a> Visitable<'a> for ForStatement {
             value: NodeV::Visited(Value::VoidType),
         }));
 
-        ctx.borrow()
-            .locals
-            .borrow_mut()
-            .insert(self.name.clone(), childv.clone());
+        ctx.borrow().locals.borrow_mut().insert(
+            self.name.clone(),
+            (Rc::new(RefCell::new(1)), childv.clone()),
+        );
 
         for child in children {
             childv.borrow_mut().value = NodeV::Visited(child.borrow().clone());
@@ -113,10 +113,10 @@ impl<'a> Visitable<'a> for ForStatement {
             value: NodeV::Visited(Value::VoidType),
         }));
 
-        ctx.borrow()
-            .locals
-            .borrow_mut()
-            .insert(self.name.clone(), childv.clone());
+        ctx.borrow().locals.borrow_mut().insert(
+            self.name.clone(),
+            (Rc::new(RefCell::new(1)), childv.clone()),
+        );
 
         for child in children {
             childv.borrow_mut().value = NodeV::Visited(child.borrow().clone());

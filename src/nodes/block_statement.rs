@@ -51,7 +51,11 @@ impl<'a> Visitable<'a> for BlockStatement {
     fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let sub_ctx = Rc::new(RefCell::new(ctx.borrow().duplicate()));
 
-        let res = Rc::new(RefCell::new(Node {
+        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
+            *id.borrow_mut() += 1;
+        }
+
+        let mut res = Rc::new(RefCell::new(Node {
             pos: self.pos.clone(),
             value: NodeV::Visited(Value::VoidType),
             ctx: sub_ctx.clone(),
@@ -62,9 +66,22 @@ impl<'a> Visitable<'a> for BlockStatement {
 
             match &node_visited.clone().try_into()? {
                 Value::VoidType => {}
-                _ => return Ok(node_visited.clone()),
+                _ => {
+                    res = node_visited.clone();
+                    break;
+                }
             }
         }
+
+        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
+            *id.borrow_mut() -= 1;
+        }
+
+        let b = ctx.borrow();
+
+        let loc = &mut b.locals.borrow_mut();
+
+        loc.retain(|_, (id, _)| *id.borrow() != 0);
 
         Ok(res)
     }
@@ -72,15 +89,31 @@ impl<'a> Visitable<'a> for BlockStatement {
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         let mut result: Option<Value> = None;
 
+        let sub_ctx = Rc::new(RefCell::new(ctx.borrow().duplicate()));
+
+        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
+            *id.borrow_mut() += 1;
+        }
+
         for node in &self.body {
-            if *ctx.borrow().returned.clone().unwrap().borrow() == true {
+            if *sub_ctx.borrow().returned.clone().unwrap().borrow() == true {
                 return Err(Error::BambaError {
                     data: ErrorData::CodeAfterReturnError,
                     pos: node.pos.clone(),
                 });
             }
-            result = node.emit(ctx.clone())?;
+            result = node.emit(sub_ctx.clone())?;
         }
+
+        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
+            *id.borrow_mut() -= 1;
+        }
+
+        let b = ctx.borrow();
+
+        let loc = &mut b.locals.borrow_mut();
+
+        loc.retain(|_, (id, _)| *id.borrow() != 0);
 
         Ok(result)
     }
