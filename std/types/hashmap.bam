@@ -55,7 +55,7 @@ def HashMap: fn[K, V] -> Class {
 
             if (*entry.head == (*EntryElem)(null)) {
                 return (*V)(null);
-            } else {
+            } else  {
                 def current: new *EntryElem.Node = *entry.head;
 
                 while (*current != (*EntryElem.Node)(null)) {
@@ -97,6 +97,18 @@ def HashMap: fn[K, V] -> Class {
             def result: new Self = null;
 
             return *result;
+        };
+    
+        def `drop`: fn[self: *Self] -> Void {
+            def i: new usize = usize(0);
+
+            while (*i < usize(256)) {
+                self.entrys[*i].`drop`();
+                
+                i = *i + usize(1);
+            }
+            
+            return;
         };
     };
 };

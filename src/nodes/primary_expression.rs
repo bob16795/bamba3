@@ -21,6 +21,7 @@ pub enum PrimaryExpressionChild {
     Dollar(dollar_expression::DollarExpression),
     Comptime(ComptimeExpression),
     Emit(EmitExpression),
+    Drop(drop_expression::DropExpression),
 }
 
 #[derive(Debug, Clone)]
@@ -116,6 +117,13 @@ impl Parsable for PrimaryExpression {
             });
         }
 
+        let parsed = drop_expression::DropExpression::parse(scn);
+        if parsed.is_some() {
+            return Some(PrimaryExpression {
+                child: Box::new(PrimaryExpressionChild::Drop(parsed.unwrap())),
+            });
+        }
+
         scn.set_checkpoint(start);
         None
     }
@@ -149,6 +157,7 @@ impl<'a> Visitable<'a> for PrimaryExpression {
                     ctx,
                 })))
             }
+            PrimaryExpressionChild::Drop(i) => i.visit(ctx),
             PrimaryExpressionChild::Include(i) => i.visit(ctx),
             PrimaryExpressionChild::New(i) => i.visit(ctx),
             PrimaryExpressionChild::Dollar(i) => i.visit(ctx),
@@ -195,13 +204,13 @@ impl<'a> Visitable<'a> for PrimaryExpression {
                     }));
 
                     let cb = &mut children.borrow_mut();
-                    cb.insert(def.name.clone(), (Rc::new(RefCell::new(1)), b.clone()));
+                    cb.insert(def.name.clone(), (Rc::new(RefCell::new(None)), b.clone()));
 
                     sub_ctx
                         .borrow_mut()
                         .locals
                         .borrow_mut()
-                        .insert(def.name.clone(), (Rc::new(RefCell::new(1)), b));
+                        .insert(def.name.clone(), (Rc::new(RefCell::new(None)), b));
 
                     if def.force {
                         to_visit.push(def.name.clone());
@@ -226,6 +235,7 @@ impl<'a> Visitable<'a> for PrimaryExpression {
 
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         match self.child.as_ref() {
+            PrimaryExpressionChild::Drop(i) => i.emit(ctx),
             PrimaryExpressionChild::Ident(i) => i.emit(ctx),
             PrimaryExpressionChild::ConstString(i) => i.emit(ctx),
             PrimaryExpressionChild::Paren(i) => i.emit(ctx),
@@ -238,6 +248,32 @@ impl<'a> Visitable<'a> for PrimaryExpression {
             PrimaryExpressionChild::Class(_) => Ok(Some(self.visit(ctx.clone())?.try_into()?)),
             PrimaryExpressionChild::Emit(i) => i.expr.emit(ctx),
             v => todo!("{:?}", v),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            PrimaryExpressionChild::Drop(i) => i.uses(name),
+            PrimaryExpressionChild::Ident(i) => i.uses(name),
+            PrimaryExpressionChild::ConstString(i) => i.uses(name),
+            PrimaryExpressionChild::Paren(i) => i.uses(name),
+            PrimaryExpressionChild::ConstInt(_) => Ok(false),
+            PrimaryExpressionChild::ConstReal(_) => Ok(false),
+            PrimaryExpressionChild::Function(i) => i.uses(name),
+            PrimaryExpressionChild::New(i) => i.uses(name),
+            PrimaryExpressionChild::Comptime(i) => i.expr.uses(name),
+            PrimaryExpressionChild::Dollar(i) => i.uses(name),
+            PrimaryExpressionChild::Class(i) => {
+                for d in &i.defs {
+                    if d.value.uses(name)? {
+                        return Ok(true);
+                    }
+                }
+
+                Ok(false)
+            }
+            PrimaryExpressionChild::Emit(i) => i.expr.uses(name),
+            PrimaryExpressionChild::Include(i) => i.uses(name),
         }
     }
 }

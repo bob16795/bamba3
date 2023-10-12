@@ -455,7 +455,6 @@ def CollisionSystem: class {
 
 // externs
 def printf: extern fn[] -> Void;
-def malloc: extern fn[] -> *Void;
 
 // globals
 def coordinator: new ecs.Coordinator;

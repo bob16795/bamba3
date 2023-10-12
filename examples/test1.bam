@@ -59,10 +59,10 @@ def ClosureTest: std.Types.Closure(
     },
     i32,
     fn[a: *class { def a: prop *i32; }, b: *class { def b: prop i32; }] -> i32 {
-        a.a = b.b; 
-        printf("set a to %d\n", *a.a);
+        *a.a = *b.b; 
+        printf("set a to %d\n", **a.a);
 
-        return *a.a;
+        return **a.a;
     }
 );
 
@@ -76,19 +76,21 @@ def getMain: fn[Start] -> (fn[] -> i32) {
             def closureInstance: new ClosureTest;
             
             // set the initial value
-            def initVal: new ClosureTest.I = $[*a];
-            closureInstance = ClosureTest.init(*initVal);
+            def initVal: new ClosureTest.I = $[a];
+            closureInstance = ClosureTest.init(initVal);
 
             // create a runner value
             def runVal: new ClosureTest.P;
 
             // run the test with 10
             runVal = $[i32(10)];
-            closureInstance(*runVal);
+            closureInstance(runVal);
 
             // run the test with 20
             runVal = $[i32(20)];
-            closureInstance(*runVal);
+            closureInstance(runVal);
+
+            printf("a is %d\n", *a);
 
             // misc stuff
             def drivables: new drivablesType;
@@ -97,25 +99,25 @@ def getMain: fn[Start] -> (fn[] -> i32) {
             def car: new Car;
             def motorcycle: new MotorCycle;
 
-            def tmp: new comptime {
-                return class {
-                    def message: "Hello World!\n"; 
-                    def tmp: prop i32;
+            //def tmp: new comptime {
+            //    return class {
+            //        def message: "Hello World!\n"; 
+            //        def tmp: prop i32;
 
-                    def hw: fn[self: *Self] -> Void {
-                        printf(message);
+            //        def hw: fn[self: *Self] -> Void {
+            //            printf(message);
 
-                        self.tmp = i32(1);
+            //            self.tmp = i32(1);
 
-                        return;
-                    };
-                };
-            };
+            //            return;
+            //        };
+            //    };
+            //};
 
-            (*tmp).TYPE.hw(tmp);
-            tmp.hw();
+            //(*tmp).TYPE.hw(tmp);
+            //tmp.hw();
 
-            printf("%d\n", *tmp.tmp);
+            //printf("%d\n", *tmp.tmp);
 
             drivables.append(Drivable.init(MotorCycle, motorcycle));
             drivables.append(Drivable.init(Car, car));

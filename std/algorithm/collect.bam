@@ -1,23 +1,21 @@
-def Slice: import "std/types/slice.bam".Slice;
+def ArrayList: import "std/types.bam".ArrayList;
 
-def realloc: import "std/types.bam".malloc;
+def realloc: import "std/types.bam".realloc;
+def free: import "std/types.bam".free;
 
-def Collect: fn[T] -> (fn[] -> *u8[]) {
-    def SliceT: Slice(T.Item);
+def Collect: fn[T] -> (fn[] -> Types.ArrayList(*Void)) {
+    def SliceT: ArrayList(T.Item);
 
     return fn[base: *T] -> SliceT {
         def result: new SliceT;
-        result.ptr = null;
-        result.len = usize(0);
+        result.init();
 
         def sp: new T.Item;
 
         while (base.hasNext()) {
             sp = base.next();
-            result.ptr = realloc(*result.ptr, (*result.len + usize(1)) * T.Item.SIZE);
-            result[*result.len] = *sp; 
 
-            result.len = *result.len + usize(1);
+            result.append(*sp);
         }
 
         return *result;

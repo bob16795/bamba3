@@ -98,6 +98,7 @@ impl<'a> Visitable<'a> for TopExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::ConstNull,
                     ) => {
@@ -133,19 +134,13 @@ impl<'a> Visitable<'a> for TopExpression {
 
                         Ok(Some(a))
                     }
-                    (
-                        Value::Value {
-                            val: av,
-                            kind: _a_type,
-                        },
-                        Value::Tuple { children },
-                    ) => {
+                    (Value::Value { val: av, .. }, Value::Tuple { children }) => {
                         let mut vals = Vec::new();
 
                         // TODO: check assignable
 
                         for c in children {
-                            let Value::Value { val: c, kind: _ } = c.borrow().clone() else {
+                            let Value::Value { val: c, .. } = c.borrow().clone() else {
                                 return Err(Error::BambaError {
                                     data: ErrorData::NoValueError,
                                     pos: self.pos.clone(),
@@ -163,13 +158,7 @@ impl<'a> Visitable<'a> for TopExpression {
 
                         Ok(Some(a))
                     }
-                    (
-                        Value::Value {
-                            val: av,
-                            kind: _a_type,
-                        },
-                        Value::Function { .. },
-                    ) => {
+                    (Value::Value { val: av, .. }, Value::Function { .. }) => {
                         let mut b = Node {
                             ctx: ctx.clone(),
                             pos: self.pos.clone(),
@@ -191,10 +180,12 @@ impl<'a> Visitable<'a> for TopExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = &a_type.try_into()?;
@@ -280,6 +271,14 @@ impl<'a> Visitable<'a> for TopExpression {
                 }
             }
             TopExpressionChild::OrExpression(or) => or.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            TopExpressionChild::Assignment(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            TopExpressionChild::Prop(un) => un.uses(name),
+            TopExpressionChild::OrExpression(c) => c.uses(name),
         }
     }
 }

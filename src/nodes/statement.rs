@@ -119,9 +119,10 @@ impl<'a> Visitable<'a> for Statement {
                 val.borrow_mut().set_name(ex.name.clone())?;
 
                 let locals = &mut ctx.borrow_mut().locals;
-                locals
-                    .borrow_mut()
-                    .insert(ex.name.clone(), (Rc::new(RefCell::new(1)), val.clone()));
+                locals.borrow_mut().insert(
+                    ex.name.clone(),
+                    (Rc::new(RefCell::new(Some(1))), val.clone()),
+                );
 
                 Ok(Rc::new(RefCell::new(Node {
                     pos: self.pos.clone(),
@@ -155,7 +156,7 @@ impl<'a> Visitable<'a> for Statement {
                 let locals = &mut ctx.borrow_mut().locals;
                 locals.borrow_mut().insert(
                     ex.name.clone(),
-                    (Rc::new(RefCell::new(1)), Rc::new(RefCell::new(res))),
+                    (Rc::new(RefCell::new(Some(1))), Rc::new(RefCell::new(res))),
                 );
 
                 Ok(None)
@@ -164,6 +165,19 @@ impl<'a> Visitable<'a> for Statement {
             StatementChild::While(ex) => ex.emit(ctx),
             StatementChild::For(ex) => ex.emit(ctx),
             StatementChild::If(ex) => ex.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            StatementChild::Expression(ex) => ex.uses(name),
+            StatementChild::Block(ex) => ex.uses(name),
+            StatementChild::Return(ex) => ex.uses(name),
+            StatementChild::Def(ex) => ex.value.uses(name),
+            StatementChild::Break(ex) => ex.uses(name),
+            StatementChild::While(ex) => ex.uses(name),
+            StatementChild::For(ex) => ex.uses(name),
+            StatementChild::If(ex) => ex.uses(name),
         }
     }
 }

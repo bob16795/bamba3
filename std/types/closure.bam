@@ -11,7 +11,7 @@ def Closure: fn[I, P, O, Func] -> Class {
 
             result.data = inside;
 
-            return result;
+            return *result;
         };
 
         def `()`: fn[self: *Self, params: Self.P] -> Self.O {

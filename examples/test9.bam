@@ -26,12 +26,12 @@ force def main: fn[] -> i32 {
 
     def hashMap: new StringHashMap = StringHashMap.init();
 
-    hashMap.put(String.from("lolevreq"), i32(12));
-    hashMap.put(String.from("pooevreq"), i32(10));
-    hashMap.put(String.from("ollfjevreq"), i32(10));
-    hashMap.put(String.from("abs"), i32(120));
-    hashMap.put(String.from("fdsa"), i32(100));
-    hashMap.put(String.from("rewqhjuvfeq"), i32(100));
+    def p1: new String = String.from("a");
+    hashMap.put(*p1, i32(1));
+    def p2: new String = String.from("ab");
+    hashMap.put(*p2, i32(12));
+    def p3: new String = String.from("abc");
+    hashMap.put(*p3, i32(123));
 
     printf("hashMap = ");
     hashMap.print();

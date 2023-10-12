@@ -51,8 +51,12 @@ impl<'a> Visitable<'a> for BlockStatement {
     fn visit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Rc<RefCell<Node<'a>>>, Error<'a>> {
         let sub_ctx = Rc::new(RefCell::new(ctx.borrow().duplicate()));
 
-        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
-            *id.borrow_mut() += 1;
+        for (_, (id, v)) in &mut sub_ctx.borrow().locals.borrow().iter() {
+            let tmp: &mut Option<u32> = &mut id.borrow_mut();
+
+            if tmp.is_some() {
+                *tmp = Some(tmp.unwrap() + 1);
+            }
         }
 
         let mut res = Rc::new(RefCell::new(Node {
@@ -73,15 +77,28 @@ impl<'a> Visitable<'a> for BlockStatement {
             }
         }
 
-        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
-            *id.borrow_mut() -= 1;
+        let ctxb = sub_ctx.borrow();
+
+        for (_, (id, v)) in &mut ctxb.locals.borrow().iter() {
+            let tmp: &mut Option<u32> = &mut id.borrow_mut();
+
+            if tmp.is_some() {
+                *tmp = Some(tmp.unwrap() - 1);
+
+                if let Some(returned) = ctxb.returned.clone() {
+                    if !*returned.borrow() && tmp.unwrap() == 0 {
+                        let v: Value = v.clone().try_into()?;
+                        v.emit_drop(self.pos.clone())?;
+                    }
+                }
+            }
         }
 
         let b = ctx.borrow();
 
         let loc = &mut b.locals.borrow_mut();
 
-        loc.retain(|_, (id, _)| *id.borrow() != 0);
+        loc.retain(|_, (id, _)| *id.borrow() != Some(0));
 
         Ok(res)
     }
@@ -91,8 +108,12 @@ impl<'a> Visitable<'a> for BlockStatement {
 
         let sub_ctx = Rc::new(RefCell::new(ctx.borrow().duplicate()));
 
-        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
-            *id.borrow_mut() += 1;
+        for (_, (id, v)) in &mut sub_ctx.borrow().locals.borrow().iter() {
+            let tmp: &mut Option<u32> = &mut id.borrow_mut();
+
+            if tmp.is_some() {
+                *tmp = Some(tmp.unwrap() + 1);
+            }
         }
 
         for node in &self.body {
@@ -105,16 +126,39 @@ impl<'a> Visitable<'a> for BlockStatement {
             result = node.emit(sub_ctx.clone())?;
         }
 
-        for (_, (id, _)) in &mut sub_ctx.borrow().locals.borrow().iter() {
-            *id.borrow_mut() -= 1;
+        let ctxb = sub_ctx.borrow();
+
+        for (_, (id, v)) in &mut ctxb.locals.borrow().iter() {
+            let tmp: &mut Option<u32> = &mut id.borrow_mut();
+
+            if tmp.is_some() {
+                *tmp = Some(tmp.unwrap() - 1);
+
+                if let Some(returned) = ctxb.returned.clone() {
+                    if !*returned.borrow() && tmp.unwrap() == 0 {
+                        let v: Value = v.clone().try_into()?;
+                        v.emit_drop(self.pos.clone())?;
+                    }
+                }
+            }
         }
 
         let b = ctx.borrow();
 
         let loc = &mut b.locals.borrow_mut();
 
-        loc.retain(|_, (id, _)| *id.borrow() != 0);
+        loc.retain(|_, (id, _)| *id.borrow() != Some(0));
 
         Ok(result)
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        for c in &self.body {
+            if c.uses(name)? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }

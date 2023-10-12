@@ -1,0 +1,25 @@
+def Box: fn[T] -> Class {
+    return class {
+        def ptr: prop *T;
+
+        def init: fn[data: T] -> Self {
+            def result: new Self;
+
+            result.ptr = malloc(T.SIZE);
+
+            *result.ptr = data;
+
+            return *result;
+        };
+
+        def `drop`: fn[self: *Self] -> Void {
+            def tmp: *self.ptr;
+            
+            drop tmp;
+
+            free(*self.ptr);
+
+            return;
+        };
+    };
+};

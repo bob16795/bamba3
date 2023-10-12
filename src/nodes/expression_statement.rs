@@ -51,4 +51,8 @@ impl<'a> Visitable<'a> for ExpressionStatement {
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         self.expr.emit(ctx)
     }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        self.expr.uses(name)
+    }
 }

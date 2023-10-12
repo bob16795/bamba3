@@ -3,6 +3,19 @@ def SinglyLinkedList: fn[T] -> Class {
         def Node: class {
             def data: prop T;
             def next: prop *Void;
+
+            def dropNext: fn[self: *Self] -> Void {
+                if (*self.next == (*Void)(null))
+                    return;
+
+                def oldNext: *self.next;
+
+                self.next = *(*Self)(*self.next).next;
+
+                free(oldNext);
+
+                return;
+            };
         };
         
         def head: prop *Self.Node;
@@ -33,6 +46,19 @@ def SinglyLinkedList: fn[T] -> Class {
                 (*Self.Node)(*(*current).next).data = data;
             }
 
+            return;
+        };
+
+        def `drop`: fn[self: *Self] -> Void {
+            if (*self.head == (*Self.Node)(null))
+                return;
+
+            while (*(*self.head).next != (*Void)(null)) {
+                (*self.head).dropNext();
+            }
+
+            free(*self.head);
+            
             return;
         };
     };

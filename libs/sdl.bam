@@ -26,11 +26,11 @@ def init: fn[flags: u32] -> u32 {
 
     return SDL_Init(flags);
 };
+    
+def SDL_GetPerformanceCounter: extern fn[] -> u64;
+def SDL_GetPerformanceFrequency: extern fn[] -> u64;
 
 def getDT: fn[] -> f64 {
-    def SDL_GetPerformanceCounter: extern fn[] -> u64;
-    def SDL_GetPerformanceFrequency: extern fn[] -> u64;
-
     lastTime = *nowTime;
     nowTime = SDL_GetPerformanceCounter();
 

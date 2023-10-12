@@ -1,0 +1,12 @@
+def std: import "std/std.bam";
+
+def String: std.Types.String;
+
+force def main: fn[] -> i32 {
+    def s: new String = String.from("Hello World!");
+
+    s.println();
+
+    return i32(0);
+};
+

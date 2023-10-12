@@ -1,0 +1,15 @@
+def std: import "std/std.bam";
+
+def BoxT: std.Types.Box(i32);
+
+def printf: extern fn[] -> Void;
+
+force def main: fn[] -> i32 {
+    def box: new BoxT;
+
+    box = BoxT.init(i32(10));
+
+    printf("%d\n", **box.ptr);
+
+    return i32(10);
+};

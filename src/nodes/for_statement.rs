@@ -80,7 +80,7 @@ impl<'a> Visitable<'a> for ForStatement {
 
         ctx.borrow().locals.borrow_mut().insert(
             self.name.clone(),
-            (Rc::new(RefCell::new(1)), childv.clone()),
+            (Rc::new(RefCell::new(None)), childv.clone()),
         );
 
         for child in children {
@@ -88,6 +88,8 @@ impl<'a> Visitable<'a> for ForStatement {
 
             self.child.visit(ctx.clone())?;
         }
+
+        ctx.borrow().locals.borrow_mut().remove(&self.name);
 
         return Ok(Rc::new(RefCell::new(Node {
             pos: self.pos.clone(),
@@ -115,7 +117,7 @@ impl<'a> Visitable<'a> for ForStatement {
 
         ctx.borrow().locals.borrow_mut().insert(
             self.name.clone(),
-            (Rc::new(RefCell::new(1)), childv.clone()),
+            (Rc::new(RefCell::new(None)), childv.clone()),
         );
 
         for child in children {
@@ -124,6 +126,12 @@ impl<'a> Visitable<'a> for ForStatement {
             self.child.emit(ctx.clone())?;
         }
 
+        ctx.borrow().locals.borrow_mut().remove(&self.name);
+
         return Ok(Some(Value::VoidType));
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        Ok(self.expr.uses(name)? || self.child.uses(name)?)
     }
 }

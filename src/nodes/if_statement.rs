@@ -122,7 +122,7 @@ impl<'a> Visitable<'a> for IfStatement {
                 pos: self.pos.clone(),
                 data: ErrorData::NoValueError,
             }),
-            Some(Value::Value { val, kind: _ }) => {
+            Some(Value::Value { val, .. }) => {
                 let (body_bb, else_bb, merge_bb) = {
                     let context = &ctx.borrow();
 
@@ -232,5 +232,11 @@ impl<'a> Visitable<'a> for IfStatement {
                 },
             }),
         };
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        Ok(self.expr.uses(name)?
+            || self.child.uses(name)?
+            || (self.other.is_some() && self.other.clone().unwrap().uses(name)?))
     }
 }

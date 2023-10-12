@@ -41,4 +41,8 @@ impl<'a> Visitable<'a> for BreakStatement {
 
         Ok(None)
     }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        Ok(false)
+    }
 }

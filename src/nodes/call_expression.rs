@@ -313,7 +313,7 @@ impl<'a> Visitable<'a> for CallExpression {
                         children.borrow_mut().insert(
                             name.clone(),
                             (
-                                Rc::new(RefCell::new(1)),
+                                Rc::new(RefCell::new(None)),
                                 Rc::new(RefCell::new(Node {
                                     ctx: ctx.clone(),
                                     pos: self.pos.clone(),
@@ -375,7 +375,7 @@ impl<'a> Visitable<'a> for CallExpression {
                 let index = idx.emit(ctx.clone())?;
 
                 match (parent.clone().unwrap(), index.clone().unwrap()) {
-                    (Value::Value { val, kind }, Value::Value { val: iv, kind: _ }) => {
+                    (Value::Value { val, kind, .. }, Value::Value { val: iv, .. }) => {
                         let cb = ctx.clone();
                         let cb = cb.borrow();
 
@@ -475,9 +475,10 @@ impl<'a> Visitable<'a> for CallExpression {
                                 ctx: ctx.clone(),
                                 value: NodeV::Visited(Value::PointerType(kind)),
                             })),
+                            dropable: false,
                         }))
                     }
-                    (Value::Value { val, kind }, Value::ConstInt(i)) => {
+                    (Value::Value { val, kind, .. }, Value::ConstInt(i)) => {
                         let cb = ctx.clone();
                         let cb = cb.borrow();
 
@@ -498,6 +499,7 @@ impl<'a> Visitable<'a> for CallExpression {
                         Ok(Some(Value::Value {
                             val: Rc::new(val),
                             kind,
+                            dropable: false,
                         }))
                     }
                     _ => Ok(Some(self.visit(ctx.clone())?.try_into()?)),
@@ -609,7 +611,7 @@ impl<'a> Visitable<'a> for CallExpression {
                         children.borrow_mut().insert(
                             name.clone(),
                             (
-                                Rc::new(RefCell::new(1)),
+                                Rc::new(RefCell::new(None)),
                                 Rc::new(RefCell::new(Node {
                                     ctx: ctx.clone(),
                                     pos: self.pos.clone(),
@@ -651,6 +653,25 @@ impl<'a> Visitable<'a> for CallExpression {
                 }
             }
             CallExpressionChild::PrimaryExpression(compare) => compare.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            CallExpressionChild::Call { func, params } => {
+                for c in params {
+                    if c.uses(name)? {
+                        return Ok(true);
+                    }
+                }
+
+                func.uses(name)
+            }
+            CallExpressionChild::Access { parent, .. } => parent.uses(name),
+            CallExpressionChild::Index { parent, index } => {
+                Ok(parent.uses(name)? || (index.is_some() && index.clone().unwrap().uses(name)?))
+            }
+            CallExpressionChild::PrimaryExpression(p) => p.uses(name),
         }
     }
 }

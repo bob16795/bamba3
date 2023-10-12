@@ -90,6 +90,12 @@ def ArrayList: fn[T] -> Class {
             return self.items[idx];
         };
 
+        def `drop`: fn[self: *Self] -> Void {
+            free(*self.items.ptr);
+
+            return;
+        };
+
         def hashFn: Hash.getHash(T);
 
         def hash: fn[self: *Self] -> i32 {

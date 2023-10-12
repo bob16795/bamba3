@@ -100,10 +100,12 @@ impl<'a> Visitable<'a> for OrExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -147,6 +149,7 @@ impl<'a> Visitable<'a> for OrExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -172,6 +175,13 @@ impl<'a> Visitable<'a> for OrExpression {
                 }
             }
             OrExpressionChild::AndExpression(and) => and.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            OrExpressionChild::Or(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            OrExpressionChild::AndExpression(c) => c.uses(name),
         }
     }
 }

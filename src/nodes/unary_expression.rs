@@ -118,7 +118,7 @@ impl<'a> Visitable<'a> for UnaryExpression {
                 child.borrow_mut().visit()?;
 
                 match &child.clone().try_into()? {
-                    Value::Value { val, kind } => match kind.clone().try_into()? {
+                    Value::Value { val, kind, .. } => match kind.clone().try_into()? {
                         Value::PointerType(p) => {
                             let load = {
                                 let b = ctx.borrow();
@@ -151,6 +151,7 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                 value: NodeV::Visited(Value::Value {
                                     val: load.into(),
                                     kind: p,
+                                    dropable: false,
                                 }),
                             })))
                         }
@@ -190,7 +191,9 @@ impl<'a> Visitable<'a> for UnaryExpression {
                 match child {
                     Some(val) => match val {
                         Value::ConstBool(v) => Ok(Some(Value::ConstBool(!v))),
-                        Value::Value { val: vval, kind } => match kind.clone().try_into()? {
+                        Value::Value {
+                            val: vval, kind, ..
+                        } => match kind.clone().try_into()? {
                             Value::IntType { size: _, signed: _ } => {
                                 let b = ctx.borrow();
 
@@ -203,6 +206,7 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                 Ok(Some(Value::Value {
                                     val: Rc::new(load),
                                     kind: kind.clone(),
+                                    dropable: false,
                                 }))
                             }
                             _ => {
@@ -240,7 +244,7 @@ impl<'a> Visitable<'a> for UnaryExpression {
 
                 match child {
                     Some(val) => match val {
-                        Value::Value { val, kind } => match kind.clone().try_into()? {
+                        Value::Value { val, kind, .. } => match kind.clone().try_into()? {
                             Value::PointerType(p) => {
                                 let load = {
                                     let b = ctx.borrow();
@@ -270,6 +274,7 @@ impl<'a> Visitable<'a> for UnaryExpression {
                                 Ok(Some(Value::Value {
                                     val: load.into(),
                                     kind: p,
+                                    dropable: false,
                                 }))
                             }
                             v => Err(Error::BambaError {
@@ -306,6 +311,15 @@ impl<'a> Visitable<'a> for UnaryExpression {
                 }
             }
             UnaryExpressionChild::CallExpression(compare) => compare.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            UnaryExpressionChild::Not(un) => un.uses(name),
+            UnaryExpressionChild::Ref(un) => un.uses(name),
+            UnaryExpressionChild::Deref(un) => un.uses(name),
+            UnaryExpressionChild::CallExpression(c) => c.uses(name),
         }
     }
 }

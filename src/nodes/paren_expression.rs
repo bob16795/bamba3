@@ -46,4 +46,8 @@ impl<'a> Visitable<'a> for ParenExpression {
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         self.child.emit(ctx.clone())
     }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        self.child.uses(name)
+    }
 }

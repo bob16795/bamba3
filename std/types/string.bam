@@ -11,6 +11,12 @@ def String: class {
 
         return *result;
     };
+        
+    def `drop`: fn[self: *Self] -> Void {
+        self.base.`drop`();
+
+        return;
+    };
 
     def from: fn[s: *u8[]] -> Self {
         def result: new Self;
@@ -71,35 +77,35 @@ def String: class {
 
     def split: fn[self: *Self, pattern: *u8[]] -> Self.Split {
         def result: new Self.Split; 
-        result.remaining = self.base.items;
+        result.remaining = *self.base.items;
         result.pattern = pattern;
 
         return *result;
     };
 
     def Split: class {
-        def remaining: prop *Base.SliceT;
+        def remaining: prop Base.SliceT;
         def pattern: prop *u8[];
 
         def Item: Base.SliceT;
     
         def hasNext: fn[self: *Self] -> Bool {
-            return *(*self.remaining).len != usize(0);
+            return *self.remaining.len != usize(0);
         };
 
         def next: fn[self: *Self] -> Item {
             def stop: new usize = usize(0);
             def len: strlen(*self.pattern);
 
-            if (*(*self.remaining).len == usize(0)) {
-                return **self.remaining;
+            if (*self.remaining.len == usize(0)) {
+                return *self.remaining;
             }
 
-            while (*stop < (*(*self.remaining).len) - usize(len)) {
-                if (memcmp(*self.pattern, (*self.remaining)[*stop], len) == i32(0)) {
-                    def result: (*self.remaining).cut(Range.init(usize(0), *stop));
+            while (*stop < (*self.remaining.len) - usize(len)) {
+                if (memcmp(*self.pattern, self.remaining[*stop], len) == i32(0)) {
+                    def result: self.remaining.cut(Range.init(usize(0), *stop));
 
-                    *self.remaining = (*self.remaining).cut(Range.init(*stop + usize(len), *(*self.remaining).len));
+                    self.remaining = self.remaining.cut(Range.init(*stop + usize(len), *self.remaining.len));
 
                     return result;
                 }
@@ -107,12 +113,13 @@ def String: class {
                 stop = *stop + usize(1);
             }
 
-            def result: **self.remaining;
+            def result: *self.remaining;
 
-            (*self.remaining).ptr = null;
-            (*self.remaining).len = usize(0);
+            self.remaining.ptr = null;
+            self.remaining.len = usize(0);
 
             return result;
         };
+
     };
 };

@@ -69,6 +69,11 @@ impl<'a> Visitable<'a> for ConstStringExpression {
                     })),
                 }),
             })),
+            dropable: false,
         }))
+    }
+
+    fn uses(&self, _: &'_ String) -> Result<bool, Error<'a>> {
+        Ok(false)
     }
 }

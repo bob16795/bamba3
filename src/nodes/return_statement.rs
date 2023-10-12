@@ -59,6 +59,35 @@ impl<'a> Visitable<'a> for ReturnStatement {
     }
 
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
+        {
+            let ctxb = ctx.borrow();
+
+            for (name, (id, fv)) in &mut ctxb.locals.borrow().iter() {
+                if id.borrow().is_none() {
+                    continue;
+                };
+
+                let fv = fv.try_borrow();
+
+                let Ok(sv) = fv else {
+                    println!("? {}", name);
+                    continue;
+                };
+
+                if self.uses(name)? {
+                    continue;
+                }
+
+                let v = sv.clone();
+
+                drop(sv);
+
+                if let NodeV::Emited(v, _) = &v.value {
+                    v.emit_drop(self.pos.clone())?;
+                }
+            }
+        }
+
         match &self.expr {
             None => {
                 let ctx_borrow = ctx.borrow();
@@ -73,7 +102,7 @@ impl<'a> Visitable<'a> for ReturnStatement {
                 let out = expr.emit(ctx.clone())?;
 
                 match out {
-                    Some(Value::Value { val, kind: _ }) => {
+                    Some(Value::Value { val, .. }) => {
                         let ctx_borrow = ctx.borrow();
 
                         let _ = ctx_borrow.builder.build_return(Some(val.as_ref()));
@@ -100,5 +129,9 @@ impl<'a> Visitable<'a> for ReturnStatement {
                 }
             }
         }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        Ok(self.expr.is_some() && self.expr.clone().unwrap().uses(name)?)
     }
 }

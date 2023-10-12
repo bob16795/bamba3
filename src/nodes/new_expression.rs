@@ -74,6 +74,7 @@ impl<'a> Visitable<'a> for NewExpression {
                     ctx: ctx.clone(),
                     value: NodeV::Visited(Value::PointerType(base_kind.clone())),
                 })),
+                dropable: true,
             }),
         })))
     }
@@ -91,72 +92,27 @@ impl<'a> Visitable<'a> for NewExpression {
 
         let ctxb = ctx.borrow();
 
-        match kind.as_ref() {
-            AnyTypeEnum::StructType(t) => Ok(Some(Value::Value {
-                val: Rc::new(
-                    ctxb.builder
-                        .build_alloca(*t, "anonAlloca")
-                        .unwrap()
-                        .as_basic_value_enum(),
-                ),
+        let k: BasicTypeEnum = kind.as_ref().clone().try_into().unwrap();
 
-                kind: Rc::new(RefCell::new(Node {
-                    ctx: ctx.clone(),
+        Ok(Some(Value::Value {
+            val: Rc::new(
+                ctxb.builder
+                    .build_alloca(k, "anonAlloca")
+                    .unwrap()
+                    .as_basic_value_enum(),
+            ),
 
-                    pos: self.pos.clone(),
-                    value: NodeV::Visited(Value::PointerType(base_kind)),
-                })),
-            })),
-            AnyTypeEnum::PointerType(t) => Ok(Some(Value::Value {
-                val: Rc::new(
-                    ctxb.builder
-                        .build_alloca(*t, "anonAlloca")
-                        .unwrap()
-                        .as_basic_value_enum(),
-                ),
-                kind: Rc::new(RefCell::new(Node {
-                    ctx: ctx.clone(),
+            kind: Rc::new(RefCell::new(Node {
+                ctx: ctx.clone(),
 
-                    pos: self.pos.clone(),
-                    value: NodeV::Visited(Value::PointerType(base_kind)),
-                })),
-            })),
-            AnyTypeEnum::ArrayType(t) => Ok(Some(Value::Value {
-                val: Rc::new(
-                    ctxb.builder
-                        .build_alloca(*t, "anonAlloca")
-                        .unwrap()
-                        .as_basic_value_enum(),
-                ),
-                kind: Rc::new(RefCell::new(Node {
-                    ctx: ctx.clone(),
-
-                    pos: self.pos.clone(),
-                    value: NodeV::Visited(Value::PointerType(base_kind)),
-                })),
-            })),
-            AnyTypeEnum::IntType(t) => Ok(Some(Value::Value {
-                val: Rc::new(
-                    ctxb.builder
-                        .build_alloca(*t, "anonAlloca")
-                        .unwrap()
-                        .as_basic_value_enum(),
-                ),
-                kind: Rc::new(RefCell::new(Node {
-                    ctx: ctx.clone(),
-
-                    pos: self.pos.clone(),
-                    value: NodeV::Visited(Value::PointerType(base_kind)),
-                })),
-            })),
-
-            _ => Err(Error::BambaError {
-                data: ErrorData::EmitUnaryOpError {
-                    kind: "new".to_string(),
-                    a: base_kind.try_into()?,
-                },
                 pos: self.pos.clone(),
-            }),
-        }
+                value: NodeV::Visited(Value::PointerType(base_kind)),
+            })),
+            dropable: true,
+        }))
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        self.kind.uses(name)
     }
 }

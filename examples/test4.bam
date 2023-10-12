@@ -16,7 +16,7 @@ def printSlice: fn[slice: *SliceT] -> Void {
         i = *i + usize(1);
     }
 
-    printf("\n", *tmp);
+    printf("\n");
    
     return;
 };

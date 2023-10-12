@@ -1,5 +1,7 @@
 use crate::position::FileRange;
 use crate::visitable::Value;
+use std::cell::BorrowError;
+use std::cell::BorrowMutError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -73,4 +75,8 @@ pub enum Error<'a> {
     BambaError { pos: FileRange, data: ErrorData<'a> },
     #[error(transparent)]
     Other(#[from] inkwell::builder::BuilderError),
+    #[error(transparent)]
+    BorrowMut(#[from] BorrowMutError),
+    #[error(transparent)]
+    Borrow(#[from] BorrowError),
 }

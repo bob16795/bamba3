@@ -50,9 +50,7 @@ impl<'a> Visitable<'a> for IdentExpression {
             .clone()
         };
 
-        let v = &mut val
-            .try_borrow_mut()
-            .expect(&format!("expected: {}", self.pos));
+        let v = &mut val.borrow_mut();
 
         v.visit()?;
 
@@ -80,5 +78,9 @@ impl<'a> Visitable<'a> for IdentExpression {
         let res = &mut val.borrow_mut();
 
         Ok(res.emit()?.clone())
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        Ok(self.value == *name)
     }
 }

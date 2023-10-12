@@ -84,4 +84,14 @@ impl<'a> Visitable<'a> for DollarExpression {
 
         Ok(Some(Value::Tuple { children }))
     }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        for c in &self.vals {
+            if c.0.uses(name)? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
 }

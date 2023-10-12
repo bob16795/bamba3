@@ -1,3 +1,4 @@
+def Box: import "std/types/box.bam".Box;
 def Range: import "std/types/range.bam".Range;
 def Slice: import "std/types/slice.bam".Slice;
 def Option: import "std/types/option.bam".Option;
@@ -12,6 +13,6 @@ def SinglyLinkedList: import "std/types/linkedlists.bam".SinglyLinkedList;
 def realloc: extern fn[] -> *Void;
 def memcmp: extern fn[] -> i32;
 def strlen: extern fn[] -> i32;
-def calloc: extern fn[] -> *Void;
 def malloc: extern fn[] -> *Void;
+def free: extern fn[] -> Void;
 def printf: extern fn[] -> Void;

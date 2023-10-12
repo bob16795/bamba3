@@ -53,4 +53,8 @@ impl<'a> Visitable<'a> for PropExpression {
             ctx,
         })))
     }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        self.kind.uses(name)
+    }
 }

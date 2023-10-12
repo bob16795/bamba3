@@ -85,4 +85,8 @@ impl<'a> Visitable<'a> for IncludeExpression {
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         Ok(Some(self.visit(ctx)?.try_into()?))
     }
+
+    fn uses(&self, _: &'_ String) -> Result<bool, Error<'a>> {
+        Ok(false)
+    }
 }

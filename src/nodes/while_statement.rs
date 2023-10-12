@@ -114,7 +114,7 @@ impl<'a> Visitable<'a> for WhileStatement {
                 pos: self.pos.clone(),
                 data: ErrorData::NoValueError,
             }),
-            Some(Value::Value { val, kind }) => match &val.clone().as_ref() {
+            Some(Value::Value { val, kind, .. }) => match &val.clone().as_ref() {
                 BasicValueEnum::IntValue(i) => {
                     let old_break = {
                         let context = &mut ctx.borrow_mut();
@@ -167,5 +167,9 @@ impl<'a> Visitable<'a> for WhileStatement {
                 data: ErrorData::ZeroCompareError { value: tmp.clone() },
             }),
         };
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        self.expr.clone().uses(name)
     }
 }

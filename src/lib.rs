@@ -11,6 +11,7 @@ pub mod nodes {
     pub mod compare_expression;
     pub mod const_string_expression;
     pub mod dollar_expression;
+    pub mod drop_expression;
     pub mod expression_statement;
     pub mod factor_expression;
     pub mod for_statement;

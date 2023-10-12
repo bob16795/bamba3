@@ -23,11 +23,13 @@ pub trait Visitable<'a> {
     fn emit(&self, ctx: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         Ok(Some(self.visit(ctx)?.try_into()?))
     }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>>;
 }
 
 #[derive(Debug, Clone)]
 pub struct NodeContext<'ctx> {
-    pub locals: Rc<RefCell<HashMap<String, (Rc<RefCell<u32>>, Rc<RefCell<Node<'ctx>>>)>>>,
+    pub locals: Rc<RefCell<HashMap<String, (Rc<RefCell<Option<u32>>>, Rc<RefCell<Node<'ctx>>>)>>>,
     pub self_value: Option<Rc<RefCell<Node<'ctx>>>>,
     pub context: Rc<&'ctx Context>,
     pub module: Rc<Module<'ctx>>,
@@ -112,7 +114,7 @@ pub enum Value<'a> {
         ctx: Rc<RefCell<NodeContext<'a>>>,
     },
     Class {
-        children: Rc<RefCell<HashMap<String, (Rc<RefCell<u32>>, Rc<RefCell<Node<'a>>>)>>>,
+        children: Rc<RefCell<HashMap<String, (Rc<RefCell<Option<u32>>>, Rc<RefCell<Node<'a>>>)>>>,
 
         kind: Rc<RefCell<Option<StructType<'a>>>>,
 
@@ -148,6 +150,8 @@ pub enum Value<'a> {
     Value {
         val: Rc<BasicValueEnum<'a>>,
         kind: Rc<RefCell<Node<'a>>>,
+
+        dropable: bool,
     },
     Method {
         func: Rc<RefCell<Node<'a>>>,
@@ -263,7 +267,14 @@ impl fmt::Display for Value<'_> {
             Value::VoidType => write!(f, "Void Type"),
             Value::FloatType => write!(f, "Float Type"),
             Value::DoubleType => write!(f, "Double Type"),
-            Value::Value { val: _, kind } => {
+            Value::Value { kind, dropable, .. } if (*dropable == true) => {
+                write!(
+                    f,
+                    "Droppable LLVM Value Of Type {}",
+                    <Rc<RefCell<Node<'_>>> as TryInto<Value>>::try_into(kind.clone()).unwrap()
+                )
+            }
+            Value::Value { kind, .. } => {
                 write!(
                     f,
                     "LLVM Value Of Type {}",
@@ -279,6 +290,36 @@ impl fmt::Display for Value<'_> {
 }
 
 impl<'a> Value<'a> {
+    pub fn emit_drop(&self, pos: FileRange) -> Result<(), Error<'a>> {
+        match self {
+            Value::Value {
+                val,
+                kind,
+                dropable,
+            } if (*dropable == true) => match kind.clone().try_into()? {
+                Value::PointerType(c) => match c.try_into()? {
+                    Value::Class { children, name, .. } => {
+                        let children = children.borrow();
+                        let drop_fn = children.get("drop");
+                        match drop_fn {
+                            Some((_, v)) => {
+                                let mut params = vec![self.clone()];
+
+                                v.borrow_mut().emit_call(&mut params)?;
+
+                                Ok(())
+                            }
+                            None => Ok(()),
+                        }
+                    }
+                    _ => Ok(()),
+                },
+                _ => Ok(()),
+            },
+            _ => Ok(()),
+        }
+    }
+
     pub fn get_type(
         &mut self,
         ctx: Rc<RefCell<NodeContext<'a>>>,
@@ -479,6 +520,7 @@ impl<'a> Value<'a> {
                             signed: false,
                         }),
                     })),
+                    dropable: false,
                 });
             }
             "TYPE" => match self.clone() {
@@ -567,7 +609,7 @@ impl<'a> Value<'a> {
                     }
                 }
             }
-            Value::Value { val, kind } => {
+            Value::Value { val, kind, .. } => {
                 kind.borrow_mut().visit()?;
 
                 match kind.clone().try_into()? {
@@ -636,6 +678,7 @@ impl<'a> Value<'a> {
                                     ctx: ctx.clone(),
                                     value: NodeV::Visited(Value::PointerType(prop_kind)),
                                 })),
+                                dropable: false,
                             })
                         }
                         _ => Err(Error::BambaError {
@@ -676,7 +719,7 @@ impl<'a> Value<'a> {
                 name,
                 ctx: _,
             } => Ok(name.clone()),
-            Value::Value { val: _, kind: _ } => Ok("".to_string()),
+            Value::Value { .. } => Ok("".to_string()),
             Value::Class {
                 kind: _,
                 name,
@@ -702,7 +745,7 @@ impl<'a> Value<'a> {
 
                 Ok(())
             }
-            Value::Value { val, kind: _ } => {
+            Value::Value { val, .. } => {
                 val.set_name(&new_name);
 
                 Ok(())
@@ -842,13 +885,14 @@ impl<'a> Value<'a> {
                             ctx_borrowed.locals.borrow_mut().insert(
                                 input.name.clone(),
                                 (
-                                    Rc::new(RefCell::new(1)),
+                                    Rc::new(RefCell::new(None)),
                                     Rc::new(RefCell::new(Node {
                                         pos: input.pos.clone(),
                                         ctx: ctx.clone(),
                                         value: NodeV::Visited(Value::Value {
                                             val: p.into(),
                                             kind: input.val.clone().unwrap(),
+                                            dropable: false,
                                         }),
                                     })),
                                 ),
@@ -915,6 +959,7 @@ impl<'a> Value<'a> {
                             })),
                         }),
                     })),
+                    dropable: false,
                 }))
             }
             _ => Ok(Some(self.clone())),
@@ -1128,7 +1173,7 @@ impl<'a> Node<'a> {
 
                 for param in params.clone() {
                     match param {
-                        Value::Value { val, kind: _ } => {
+                        Value::Value { val, .. } => {
                             p.push(val.as_ref().clone().try_into().unwrap())
                         }
                         _ => {}
@@ -1153,6 +1198,7 @@ impl<'a> Node<'a> {
                             Some(val) => Ok(Value::Value {
                                 val: Rc::new(val.into()),
                                 kind: out.clone(),
+                                dropable: false,
                             }),
                             None => Ok(Value::VoidType),
                         }
@@ -1171,7 +1217,7 @@ impl<'a> Node<'a> {
                     // TODO: check assignable
 
                     for c in children {
-                        let Value::Value { val: c, kind: _ } = c.borrow().clone() else {
+                        let Value::Value { val: c, .. } = c.borrow().clone() else {
                             return Err(Error::BambaError {
                                 data: ErrorData::NoValueError,
                                 pos: self.pos.clone(),
@@ -1188,6 +1234,7 @@ impl<'a> Node<'a> {
                     Ok(Value::Value {
                         val: val.as_basic_value_enum().into(),
                         kind: Rc::new(RefCell::new(self.clone())),
+                        dropable: false,
                     })
                 }
                 None => {
@@ -1222,10 +1269,12 @@ impl<'a> Node<'a> {
                             .into(),
                     ),
                     kind: Rc::new(RefCell::new(self.clone())),
+                    dropable: false,
                 }),
                 Some(Value::ConstReal(r)) => Ok(Value::Value {
                     val: Rc::new(self.ctx.borrow().context.f64_type().const_float(r).into()),
                     kind: Rc::new(RefCell::new(self.clone())),
+                    dropable: false,
                 }),
                 Some(Value::Value { val, .. }) => {
                     let ctxb = self.ctx.clone();
@@ -1242,6 +1291,7 @@ impl<'a> Node<'a> {
                                     .as_basic_value_enum(),
                             ),
                             kind: Rc::new(RefCell::new(self.clone())),
+                            dropable: false,
                         }),
                         BasicValueEnum::FloatValue(i) => Ok(Value::Value {
                             val: Rc::new(
@@ -1250,6 +1300,7 @@ impl<'a> Node<'a> {
                                     .as_basic_value_enum(),
                             ),
                             kind: Rc::new(RefCell::new(self.clone())),
+                            dropable: false,
                         }),
                         _ => {
                             let val: Value = self.try_into()?;
@@ -1287,6 +1338,7 @@ impl<'a> Node<'a> {
                         Ok(Value::Value {
                             val: Rc::new(out.into()),
                             kind: Rc::new(RefCell::new(self.clone())),
+                            dropable: false,
                         })
                     }
                     Some(Value::ConstInt(v)) => {
@@ -1301,9 +1353,10 @@ impl<'a> Node<'a> {
                         Ok(Value::Value {
                             val: Rc::new(out.into()),
                             kind: Rc::new(RefCell::new(self.clone())),
+                            dropable: false,
                         })
                     }
-                    Some(Value::Value { val, kind: _ }) => {
+                    Some(Value::Value { val, .. }) => {
                         let out: IntValue = match val.as_ref() {
                             BasicValueEnum::IntValue(v) => {
                                 let cl = self.clone();
@@ -1349,6 +1402,7 @@ impl<'a> Node<'a> {
                         Ok(Value::Value {
                             val: Rc::new(out.into()),
                             kind: Rc::new(RefCell::new(self.clone())),
+                            dropable: false,
                         })
                     }
 
@@ -1362,7 +1416,7 @@ impl<'a> Node<'a> {
                 }
             }
             Value::PointerType(pkind) => match &params[0] {
-                Value::Value { kind: _, val } => {
+                Value::Value { val, .. } => {
                     pkind.borrow_mut().visit()?;
 
                     match val.as_ref() {
@@ -1372,6 +1426,7 @@ impl<'a> Node<'a> {
                             Ok(Value::Value {
                                 val: val.clone(),
                                 kind: Rc::new(RefCell::new(self.clone())),
+                                dropable: false,
                             })
                         }
                         BasicValueEnum::IntValue(int) => {
@@ -1391,6 +1446,7 @@ impl<'a> Node<'a> {
                             Ok(Value::Value {
                                 val: Rc::new(val.clone()),
                                 kind: Rc::new(RefCell::new(self.clone())),
+                                dropable: false,
                             })
                         }
                         _ => Err(Error::BambaError {
@@ -1414,6 +1470,7 @@ impl<'a> Node<'a> {
                     Ok(Value::Value {
                         val: Rc::new(val.clone()),
                         kind: Rc::new(RefCell::new(self.clone())),
+                        dropable: false,
                     })
                 }
                 _ => Err(Error::BambaError {
@@ -1424,7 +1481,7 @@ impl<'a> Node<'a> {
                 }),
             },
 
-            Value::Value { val, kind } => {
+            Value::Value { val, kind, .. } => {
                 let cl = self.clone();
                 let b = cl.ctx.borrow();
 
@@ -1459,7 +1516,7 @@ impl<'a> Node<'a> {
 
                 for p in params {
                     let p: Value = p.clone().into();
-                    let Value::Value { val: p, kind: _ } = p else {
+                    let Value::Value { val: p, .. } = p else {
                         return Err(Error::BambaError {
                             data: ErrorData::PtrCallError {
                                 value: kind.try_into()?,
@@ -1494,6 +1551,7 @@ impl<'a> Node<'a> {
                     Some(v) => Ok(Value::Value {
                         val: Rc::new(v),
                         kind: output,
+                        dropable: false,
                     }),
                     None => Ok(Value::VoidType),
                 }
@@ -1549,7 +1607,7 @@ impl<'a> Node<'a> {
                 for i in input {
                     sub_ctx.borrow_mut().locals.borrow_mut().insert(
                         i.name.clone(),
-                        (Rc::new(RefCell::new(1)), params[idx].clone()),
+                        (Rc::new(RefCell::new(None)), params[idx].clone()),
                     );
                     idx += 1;
                 }
@@ -1654,7 +1712,7 @@ impl<'a> Node<'a> {
                 sub_ctx.borrow().locals.borrow_mut().insert(
                     input.name.clone(),
                     (
-                        Rc::new(RefCell::new(1)),
+                        Rc::new(RefCell::new(None)),
                         Rc::new(RefCell::new(Node {
                             pos: self.pos.clone(),
                             ctx: sub_ctx.clone(),
@@ -1728,13 +1786,14 @@ impl<'a> Node<'a> {
                                     ctx_borrowed.locals.borrow_mut().insert(
                                         input.name.clone(),
                                         (
-                                            Rc::new(RefCell::new(1)),
+                                            Rc::new(RefCell::new(None)),
                                             Rc::new(RefCell::new(Node {
                                                 pos: input.pos.clone(),
                                                 ctx: sub_ctx.clone(),
                                                 value: NodeV::Visited(Value::Value {
                                                     val: func.get_params()[i].into(),
                                                     kind: input.val.clone().unwrap(),
+                                                    dropable: false,
                                                 }),
                                             })),
                                         ),
@@ -1748,7 +1807,7 @@ impl<'a> Node<'a> {
                             ctx_borrowed.locals.borrow_mut().insert(
                                 input.name.clone(),
                                 (
-                                    Rc::new(RefCell::new(1)),
+                                    Rc::new(RefCell::new(None)),
                                     Rc::new(RefCell::new(Node {
                                         pos: input.pos.clone(),
                                         ctx: sub_ctx.clone(),
@@ -2017,7 +2076,7 @@ impl<'a> Visitable<'a> for parser::File {
             ctx.borrow_mut()
                 .locals
                 .borrow_mut()
-                .insert(def.name.clone(), (Rc::new(RefCell::new(1)), b));
+                .insert(def.name.clone(), (Rc::new(RefCell::new(None)), b));
 
             if def.force {
                 to_visit.push(def.name.clone());
@@ -2051,5 +2110,9 @@ impl<'a> Visitable<'a> for parser::File {
 
     fn emit(&self, _: Rc<RefCell<NodeContext<'a>>>) -> Result<Option<Value<'a>>, Error<'a>> {
         todo!("emit file");
+    }
+
+    fn uses(&self, _: &'_ String) -> Result<bool, Error<'a>> {
+        todo!()
     }
 }

@@ -190,10 +190,12 @@ impl<'a> Visitable<'a> for FactorExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -217,6 +219,7 @@ impl<'a> Visitable<'a> for FactorExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
                             (
@@ -256,6 +259,7 @@ impl<'a> Visitable<'a> for FactorExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -290,10 +294,12 @@ impl<'a> Visitable<'a> for FactorExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -317,6 +323,7 @@ impl<'a> Visitable<'a> for FactorExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
                             (
@@ -356,6 +363,7 @@ impl<'a> Visitable<'a> for FactorExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -390,10 +398,12 @@ impl<'a> Visitable<'a> for FactorExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -417,6 +427,7 @@ impl<'a> Visitable<'a> for FactorExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
                             (
@@ -456,6 +467,7 @@ impl<'a> Visitable<'a> for FactorExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -490,10 +502,12 @@ impl<'a> Visitable<'a> for FactorExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -537,6 +551,7 @@ impl<'a> Visitable<'a> for FactorExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -562,6 +577,16 @@ impl<'a> Visitable<'a> for FactorExpression {
                 }
             }
             FactorExpressionChild::UnaryExpression(compare) => compare.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            FactorExpressionChild::Mul(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            FactorExpressionChild::Div(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            FactorExpressionChild::Mod(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            FactorExpressionChild::Xor(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            FactorExpressionChild::UnaryExpression(c) => c.uses(name),
         }
     }
 }

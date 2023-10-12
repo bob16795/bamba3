@@ -200,4 +200,14 @@ impl<'a> Visitable<'a> for FunctionExpression {
             pos: self.pos.clone(),
         })
     }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        for p in &self.header.input.clone() {
+            if p.kind.is_some() && p.kind.clone().unwrap().uses(name)? {
+                return Ok(true);
+            }
+        }
+
+        Ok(self.body.is_some() && self.body.clone().unwrap().uses(name)?)
+    }
 }

@@ -139,10 +139,12 @@ impl<'a> Visitable<'a> for TermExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -166,6 +168,7 @@ impl<'a> Visitable<'a> for TermExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
                             (
@@ -205,6 +208,7 @@ impl<'a> Visitable<'a> for TermExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -239,10 +243,12 @@ impl<'a> Visitable<'a> for TermExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -266,6 +272,7 @@ impl<'a> Visitable<'a> for TermExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
                             (
@@ -305,6 +312,7 @@ impl<'a> Visitable<'a> for TermExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -330,6 +338,14 @@ impl<'a> Visitable<'a> for TermExpression {
                 }
             }
             TermExpressionChild::FactorExpression(compare) => compare.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            TermExpressionChild::Sub(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            TermExpressionChild::Add(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            TermExpressionChild::FactorExpression(c) => c.uses(name),
         }
     }
 }

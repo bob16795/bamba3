@@ -94,10 +94,12 @@ impl<'a> Visitable<'a> for AndExpression {
                         Value::Value {
                             val: av,
                             kind: a_type,
+                            ..
                         },
                         Value::Value {
                             val: bv,
                             kind: b_type,
+                            ..
                         },
                     ) => {
                         let a_type = a_type.try_into()?;
@@ -141,6 +143,7 @@ impl<'a> Visitable<'a> for AndExpression {
 
                                         value: NodeV::Visited(a_type.clone()),
                                     })),
+                                    dropable: false,
                                 }))
                             }
 
@@ -165,6 +168,13 @@ impl<'a> Visitable<'a> for AndExpression {
                 }
             }
             AndExpressionChild::CompareExpression(compare) => compare.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            AndExpressionChild::And(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            AndExpressionChild::CompareExpression(c) => c.uses(name),
         }
     }
 }

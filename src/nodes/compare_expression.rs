@@ -45,10 +45,12 @@ impl<'a> CompareExpression {
                 Value::Value {
                     val: av,
                     kind: a_type,
+                    ..
                 },
                 Value::Value {
                     val: bv,
                     kind: b_type,
+                    ..
                 },
             ) => {
                 let a_type = a_type.try_into()?;
@@ -91,6 +93,7 @@ impl<'a> CompareExpression {
                                     signed: false,
                                 }),
                             })),
+                            dropable: false,
                         }))
                     }
                     (Value::PointerType(atype), Value::Class { children, .. }) => {
@@ -160,6 +163,7 @@ impl<'a> CompareExpression {
                                     signed: false,
                                 }),
                             })),
+                            dropable: false,
                         }))
                     }
                     (
@@ -203,6 +207,7 @@ impl<'a> CompareExpression {
                                     signed: false,
                                 }),
                             })),
+                            dropable: false,
                         }))
                     }
 
@@ -424,6 +429,16 @@ impl<'a> Visitable<'a> for CompareExpression {
                 self.build_cmp(ctx, &a, &b, IntPredicate::ULT)
             }
             CompareExpressionChild::TermExpression(compare) => compare.emit(ctx),
+        }
+    }
+
+    fn uses(&self, name: &'_ String) -> Result<bool, Error<'a>> {
+        match self.child.as_ref() {
+            CompareExpressionChild::Less(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            CompareExpressionChild::Greater(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            CompareExpressionChild::Eql(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            CompareExpressionChild::NotEql(a, b) => Ok(a.uses(name)? || b.uses(name)?),
+            CompareExpressionChild::TermExpression(c) => c.uses(name),
         }
     }
 }
