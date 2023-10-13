@@ -1,0 +1,407 @@
+def std: import "std";
+def pos: import "position.bam";
+def printf: std.Types.printf;
+
+def Scanner: class {
+    def src: prop std.Types.String;  
+    def file: prop std.Types.String;  
+    def slice: prop std.Types.Range;
+
+    def tok_start: prop pos.Position;
+    def tok_end: prop pos.Position;
+    def far: prop pos.Position;
+
+    def init: fn[src: std.Types.String, file: std.Types.String] -> Self {
+        def result: new Self = null;
+        result.src = src;
+        result.file = file;
+
+        result.tok_start.file = result.file;
+        result.tok_start.line = usize(1);
+        result.tok_start.col = usize(1);
+        result.tok_end.file = result.file;
+        result.tok_end.line = usize(1);
+        result.tok_end.col = usize(1);
+        result.far.file = result.file;
+        result.far.line = usize(1);
+        result.far.col = usize(1);
+
+        return *result;
+    };
+
+    def Token: class {
+        def Kind: class {
+            def None: 0;
+
+            // single char tokens
+            def LeftBrace: 1;
+            def RightBrace: 2;
+            def LeftBracket: 3;
+            def RightBracket: 4;
+            def LeftParen: 5;
+            def RightParen: 6;
+            def Underscore: 7;
+            def SemiColon: 8;
+            def Ampersand: 9;
+            def Percent: 10;
+            def Dollar: 11;
+            def Caret: 12;
+            def Tilde: 13;
+            def Colon: 14;
+            def Comma: 15;
+            def Slash: 16;
+            def Star: 17;
+            def Plus: 18;
+            def Dot: 19;
+            def Bar: 20;
+            def Lt: 21;
+            def Gt: 22;
+
+            // multi char tokens
+            def Equal: 23;
+            def EqualEqual: 24;
+            def Exclaim: 25;
+            def ExclaimEqual: 26;
+            def Minus: 27;
+            def Arrow: 28;
+    
+            // keywords
+            def Comptime: 29;
+            def Return: 30;
+            def Extern: 31;
+            def Import: 32;
+            def Break: 33;
+            def KClass: 34;
+            def Force: 35;
+            def Embed: 36;
+            def Const: 37;
+            def While: 38;
+            def Emit: 39;
+            def Prop: 40;
+            def Else: 41;
+            def Drop: 42;
+            def Pub: 43;
+            def Def: 44;
+            def New: 45;
+            def For: 46;
+            def If: 47;
+            def Fn: 48;
+            def In: 49;
+    
+            def Identifier: 50;
+            def String: 51;
+            def Number: 52;
+            def Float: 53;
+            def Char: 54;
+        };
+
+        def value: prop std.Types.Slice(u8);
+        def kind: prop u8;
+        def pos: prop pos.FileRange;
+
+        def print: fn[self: *Self] -> Void {
+            printf("%.*s, %d, %d-%d\n", *self.value.len, *self.value.ptr, *self.kind, *self.pos.start.line, *self.pos.start.col);
+
+            return;
+        };
+    };
+
+    def Checkpoint: class {
+        def slice: prop std.Types.Slice(u8);
+        def tok_end: prop pos.Position;
+    };
+
+    def getCheckpoint: fn[self: *Self] -> Checkpoint {
+        return Checkpoint($[*self.slice, *self.tok_end]);
+    };
+
+    def setCheckpoint: fn[self: *Self, cp: *Checkpoint] -> Void {
+        self.slice = *cp.slice;
+        self.tok_end = *cp.tok_end;
+    
+        return;
+    };
+    
+    def isAtEnd: fn[self: *Self] -> Bool {
+        return *self.slice.end > self.src.len();
+    };
+    
+    def AdvanceRes: std.Types.Option(u8);
+
+    def advance: fn[self: *Self] -> AdvanceRes {
+        if (self.isAtEnd()) {
+            return AdvanceRes.none();
+        }
+
+        self.slice.end = *self.slice.end + usize(1);
+                
+        def c: *self.src[*self.slice.end - usize(1)];
+
+        self.tok_end.advance(c);
+
+        return AdvanceRes.some(c);
+    };
+
+    def skipWhitespace: fn[self: *Self] -> Void {
+        while (Bool(true)) {
+            if (self.isAtEnd()) {
+                return;
+            }
+                
+            def c: *self.src[*self.slice.end];
+
+            if (c == u8(' ') | c == u8(13) | c == u8(9) | c == u8(10)) {
+                self.advance();
+            } else if (c == u8('/')) {
+                def next: *self.src[*self.slice.end];
+                if (next == u8('/')) {
+                    while (!self.isAtEnd() & *self.src[*self.slice.end] != u8(10)) {
+                        self.advance();
+                    }
+                    
+                    self.advance();
+                }
+            } else {
+                return;
+            }
+        }
+
+        return;
+    };
+
+    def TokenOpt: std.Types.Option(Token);
+
+    def matchNext: fn[self: *Self, k: u8] -> TokenOpt {
+        def start: self.getCheckpoint();
+        
+        def next: &self.next();
+        if (next.is_some()) {
+            if (*next.val.kind == k) {
+                return *next;
+            }
+        }
+        
+        return TokenOpt.none();
+    };
+    
+    def number: fn[self: *Self] -> TokenOpt {
+        def done: new Bool = Bool(false);
+
+        while (!self.isAtEnd() & !*done) {
+            def ch: &self.advance();
+
+            if (ch.is_none() | !(
+                *ch.val > u8('0' - 1) & *ch.val < u8('9' + 1) |
+                *ch.val == u8('.'))) {
+                done = Bool(true);
+                self.slice.end = *self.slice.end - usize(1);
+                self.tok_end.col = *self.tok_end.col - usize(1);
+            }
+        }
+
+        self.advance();
+
+        def word: &self.src.base.items.cut(*self.slice);
+        def kind: new u64 = u8(Token.Kind.String);
+
+        word.ptr = usize(*word.ptr) + usize(1);
+        word.len = *word.len - usize(2);
+
+        return TokenOpt.some(Token($[
+            *word,
+            u8(*kind),
+            self.tok_start.to(self.tok_end),
+        ]));
+    };
+
+    
+    def string: fn[self: *Self] -> TokenOpt {
+        def done: new Bool = Bool(false);
+
+        while (!self.isAtEnd() & !*done) {
+            def ch: &self.advance();
+
+            if (ch.is_none() | *ch.val == u8(34)) {
+                done = Bool(true);
+                self.slice.end = *self.slice.end - usize(1);
+                self.tok_end.col = *self.tok_end.col - usize(1);
+            }
+        }
+
+        self.advance();
+
+        def word: &self.src.base.items.cut(*self.slice);
+        def kind: new u64 = u8(Token.Kind.String);
+
+        word.ptr = usize(*word.ptr) + usize(1);
+        word.len = *word.len - usize(2);
+
+        return TokenOpt.some(Token($[
+            *word,
+            u8(*kind),
+            self.tok_start.to(self.tok_end),
+        ]));
+    };
+
+    def ident: fn[self: *Self] -> TokenOpt {
+        def done: new Bool = Bool(false);
+
+        while (!self.isAtEnd() & !*done) {
+            def ch: &self.advance();
+
+            if (ch.is_none() |
+                !(*ch.val > u8('a' - 1) & *ch.val < u8('z' + 1) |
+                  *ch.val > u8('A' - 1) & *ch.val < u8('Z' + 1) |
+                  *ch.val > u8('0' - 1) & *ch.val < u8('9' + 1))) {
+
+                done = Bool(true);
+                self.slice.end = *self.slice.end - usize(1);
+                self.tok_end.col = *self.tok_end.col - usize(1);
+            }
+        }
+
+        def word: &self.src.base.items.cut(*self.slice);
+        def kind: new u64 = u8(Token.Kind.Identifier);
+
+        if (*word.len == usize(8) & std.Types.memcmp(*word.ptr, "comptime", i32(8)) == i32(0))
+            kind = u8(Token.Kind.Comptime);
+        if (*word.len == usize(6) & std.Types.memcmp(*word.ptr, "return", i32(6)) == i32(0))
+            kind = u8(Token.Kind.Return);
+        if (*word.len == usize(6) & std.Types.memcmp(*word.ptr, "extern", i32(6)) == i32(0))
+            kind = u8(Token.Kind.Extern);
+        if (*word.len == usize(6) & std.Types.memcmp(*word.ptr, "import", i32(6)) == i32(0))
+            kind = u8(Token.Kind.Import);
+        if (*word.len == usize(5) & std.Types.memcmp(*word.ptr, "const", i32(5)) == i32(0))
+            kind = u8(Token.Kind.Const);
+        if (*word.len == usize(5) & std.Types.memcmp(*word.ptr, "while", i32(5)) == i32(0))
+            kind = u8(Token.Kind.While);
+        if (*word.len == usize(5) & std.Types.memcmp(*word.ptr, "embed", i32(5)) == i32(0))
+            kind = u8(Token.Kind.Embed);
+        if (*word.len == usize(5) & std.Types.memcmp(*word.ptr, "class", i32(5)) == i32(0))
+            kind = u8(Token.Kind.KClass);
+        if (*word.len == usize(5) & std.Types.memcmp(*word.ptr, "break", i32(5)) == i32(0))
+            kind = u8(Token.Kind.Break);
+        if (*word.len == usize(5) & std.Types.memcmp(*word.ptr, "force", i32(5)) == i32(0))
+            kind = u8(Token.Kind.Force);
+        if (*word.len == usize(4) & std.Types.memcmp(*word.ptr, "emit", i32(4)) == i32(0))
+            kind = u8(Token.Kind.Emit);
+        if (*word.len == usize(4) & std.Types.memcmp(*word.ptr, "prop", i32(4)) == i32(0))
+            kind = u8(Token.Kind.Prop);
+        if (*word.len == usize(4) & std.Types.memcmp(*word.ptr, "else", i32(4)) == i32(0))
+            kind = u8(Token.Kind.Else);
+        if (*word.len == usize(4) & std.Types.memcmp(*word.ptr, "drop", i32(4)) == i32(0))
+            kind = u8(Token.Kind.Drop);
+        if (*word.len == usize(3) & std.Types.memcmp(*word.ptr, "def", i32(3)) == i32(0))
+            kind = u8(Token.Kind.Def);
+
+        return TokenOpt.some(Token($[
+            *word,
+            u8(*kind),
+            self.tok_start.to(self.tok_end),
+        ]));
+    };
+
+    def next: fn[self: *Self] -> TokenOpt {
+        self.skipWhitespace();
+
+        self.slice.start = *self.slice.end;
+        self.tok_start = *self.tok_end;
+
+        def ch: &self.advance();
+
+        if (ch.is_none()) {
+            return TokenOpt.none();
+        }
+
+        // TODO: far
+        def word: &self.src.base.items.cut(*self.slice);
+        def kind: new u64 = u8(0);
+
+        if (*ch.val > u8('a' - 1) & *ch.val < u8('z' + 1) |
+            *ch.val > u8('A' - 1) & *ch.val < u8('Z' + 1)) {
+            return self.ident();
+        } else if (*ch.val > u8('0' - 1) & *ch.val < u8('9' + 1)) {
+            return self.number();
+        } else if (*ch.val == u8(34)) {
+            return self.string();
+        } else if (*ch.val == u8('@')) {
+            self.advance();
+            return self.ident();
+        } else if (*ch.val == u8('&')) {
+            kind = u8(Token.Kind.Ampersand);
+        } else if (*ch.val == u8('|')) {
+            kind = u8(Token.Kind.Bar);
+        } else if (*ch.val == u8('+')) {
+            kind = u8(Token.Kind.Plus);
+        } else if (*ch.val == u8('.')) {
+            kind = u8(Token.Kind.Dot);
+        } else if (*ch.val == u8('$')) {
+            kind = u8(Token.Kind.Dollar);
+        } else if (*ch.val == u8('^')) {
+            kind = u8(Token.Kind.Caret);
+        } else if (*ch.val == u8('{')) {
+            kind = u8(Token.Kind.LeftBrace);
+        } else if (*ch.val == u8('}')) {
+            kind = u8(Token.Kind.RightBrace);
+        } else if (*ch.val == u8('(')) {
+            kind = u8(Token.Kind.RightParen);
+        } else if (*ch.val == u8(')')) {
+            kind = u8(Token.Kind.LeftParen);
+        } else if (*ch.val == u8('[')) {
+            kind = u8(Token.Kind.RightBracket);
+        } else if (*ch.val == u8(']')) {
+            kind = u8(Token.Kind.LeftBracket);
+        } else if (*ch.val == u8('_')) {
+            kind = u8(Token.Kind.Underscore);
+        } else if (*ch.val == u8(';')) {
+            kind = u8(Token.Kind.SemiColon);
+        } else if (*ch.val == u8(':')) {
+            kind = u8(Token.Kind.Colon);
+        } else if (*ch.val == u8('/')) {
+            kind = u8(Token.Kind.Slash);
+        } else if (*ch.val == u8('%')) {
+            kind = u8(Token.Kind.Percent);
+        } else if (*ch.val == u8(',')) {
+            kind = u8(Token.Kind.Comma);
+        } else if (*ch.val == u8('*')) {
+            kind = u8(Token.Kind.Star);
+        } else if (*ch.val == u8('<')) {
+            kind = u8(Token.Kind.Lt);
+        } else if (*ch.val == u8('>')) {
+            kind = u8(Token.Kind.Gt);
+        } else if (*ch.val == u8('-')) {
+            def peek: *self.src[*self.slice.end];
+            if (peek == u8('>')) {
+                self.advance();
+                word.len = *word.len + usize(1);
+                kind = u8(Token.Kind.Arrow);
+            } else {
+                kind = u8(Token.Kind.Minus);
+            }
+        } else if (*ch.val == u8('=')) {
+            def peek: *self.src[*self.slice.end];
+            if (peek == u8('=')) {
+                self.advance();
+                word.len = *word.len + usize(1);
+                kind = u8(Token.Kind.EqualEqual);
+            } else {
+                kind = u8(Token.Kind.Equal);
+            }
+        } else {
+            return TokenOpt.none();
+        }
+
+        return TokenOpt.some(Token($[
+            *word,
+            u8(*kind),
+            self.tok_start.to(self.tok_end),
+        ]));
+    };
+
+    def `drop`: fn[self: *Self] -> Void {
+        self.src.`drop`();
+        self.file.`drop`();
+
+        return;  
+    };
+};

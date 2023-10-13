@@ -1,0 +1,3 @@
+force def main: fn[] -> i32 {
+    return i32(0);
+};

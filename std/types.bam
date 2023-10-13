@@ -1,14 +1,15 @@
-def Box: import "std/types/box.bam".Box;
-def Range: import "std/types/range.bam".Range;
-def Slice: import "std/types/slice.bam".Slice;
-def Option: import "std/types/option.bam".Option;
-def Result: import "std/types/result.bam".Result;
-def String: import "std/types/string.bam".String;
-def Closure: import "std/types/closure.bam".Closure;
-def HashMap: import "std/types/hashmap.bam".HashMap;
-def Interface: import "std/types/interface.bam".Interface;
-def ArrayList: import "std/types/arraylist.bam".ArrayList;
-def SinglyLinkedList: import "std/types/linkedlists.bam".SinglyLinkedList;
+def Box: import "types/box.bam".Box;
+def Range: import "types/range.bam".Range;
+def Slice: import "types/slice.bam".Slice;
+def Option: import "types/option.bam".Option;
+def Result: import "types/result.bam".Result;
+def String: import "types/string.bam".String;
+def HashSet: import "types/hashset.bam".HashSet;
+def Closure: import "types/closure.bam".Closure;
+def HashMap: import "types/hashmap.bam".HashMap;
+def Interface: import "types/interface.bam".Interface;
+def ArrayList: import "types/arraylist.bam".ArrayList;
+def SinglyLinkedList: import "types/linkedlists.bam".SinglyLinkedList;
 
 def realloc: extern fn[] -> *Void;
 def memcmp: extern fn[] -> i32;

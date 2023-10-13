@@ -1,7 +1,7 @@
-def ArrayList: import "std/types.bam".ArrayList;
+def ArrayList: import "std".Types.ArrayList;
 
-def realloc: import "std/types.bam".realloc;
-def free: import "std/types.bam".free;
+def realloc: import "std".Types.realloc;
+def free: import "std".Types.free;
 
 def Collect: fn[T] -> (fn[] -> Types.ArrayList(*Void)) {
     def SliceT: ArrayList(T.Item);

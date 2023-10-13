@@ -1,4 +1,4 @@
-def std: import "std/std.bam";
+def std: import "std";
 
 def MAX_ENTITIES: 500;
 def MAX_COMPONENTS: 32;

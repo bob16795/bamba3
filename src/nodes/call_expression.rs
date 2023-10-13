@@ -543,6 +543,29 @@ impl<'a> Visitable<'a> for CallExpression {
                             self.pos.clone(),
                         )?))
                     }
+                    Value::BuiltinFunc(BuiltinFunc::HasDef) => {
+                        let p0 = params[0].visit(ctx.clone())?;
+
+                        let Value::Class { children, .. } = p0.clone().try_into()? else {
+                            return Ok(Some(Value::ConstBool(false)));
+                        };
+
+                        let p1 = params[1].visit(ctx.clone())?;
+
+                        let name = match p1.try_into()? {
+                            Value::ConstString(s) => s,
+                            v => {
+                                return Err(Error::BambaError {
+                                    data: ErrorData::StringError { kind: v },
+                                    pos: self.pos.clone(),
+                                })
+                            }
+                        };
+
+                        Ok(Some(Value::ConstBool(
+                            children.clone().borrow().contains_key(&name),
+                        )))
+                    }
                     Value::BuiltinFunc(BuiltinFunc::SetName) => {
                         let p0 = params[0].visit(ctx.clone())?;
 

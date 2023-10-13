@@ -181,9 +181,6 @@ impl<'a> Visitable<'a> for IfStatement {
 
                         if self.other.is_some() {
                             self.other.clone().unwrap().emit(ctx.clone())?;
-                        }
-
-                        {
                             let context = &ctx.borrow();
 
                             let else_ret = *context.returned.clone().unwrap().borrow();
@@ -195,6 +192,14 @@ impl<'a> Visitable<'a> for IfStatement {
                             context.builder.position_at_end(merge_bb);
 
                             *context.returned.clone().unwrap().borrow_mut() = else_ret && body_ret;
+                        } else {
+                            let context = &ctx.borrow();
+
+                            _ = context.builder.build_unconditional_branch(merge_bb);
+
+                            context.builder.position_at_end(merge_bb);
+
+                            *context.returned.clone().unwrap().borrow_mut() = false;
                         }
 
                         Ok(None)

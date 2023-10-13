@@ -1,0 +1,32 @@
+def String: import "std".Types.String;
+
+def File: class {
+    def ptr: prop *Void;
+
+    def fseek: extern fn[] -> Void;
+    def ftell: extern fn[] -> usize;
+    def fread: extern fn[] -> Void;
+
+    def SEEK_END: i32(2);
+    def SEEK_SET: i32(0);
+
+    def open: fn[path: String] -> Self {
+        def fopen: extern fn[] -> Self;
+        
+        return fopen(*(&path).base.items.ptr, "r");
+    };
+
+    def readAll: fn[self: *Self] -> String {
+        def result: new String;
+        result = String.init();
+        fseek(*self.ptr, i32(0), SEEK_END);
+
+        def fsize: ftell(*self.ptr);
+        fseek(*self.ptr, i32(0), SEEK_SET);
+
+        result.base.ensureLen(fsize);
+        fread(*result.base.items.ptr, fsize, i32(1), *self.ptr);
+
+        return *result;
+    };
+};

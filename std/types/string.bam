@@ -1,4 +1,4 @@
-def Range: import "std/types/range.bam".Range;
+def Range: import "std".Types.Range;
 
 def String: class {
     def Base: ArrayList(u8);  
@@ -66,7 +66,7 @@ def String: class {
     };
     
     def `==`: fn[self: *Self, other: Self] -> Bool {
-        def other: new Self = other;
+        def other: &other;
 
         if (self.len() != other.len()) return Bool(false);
 
@@ -74,6 +74,20 @@ def String: class {
     };
 
     def hash: Base.hash;
+
+    def clone: fn[self: *Self] -> Self {
+        def result: new Self = Self.init();
+
+        def i: new usize = usize(0);
+
+        while (*i < self.len()) {
+            result.base.append(*self[*i]);
+
+            i = *i + usize(1);
+        }
+
+        return *result;
+    };
 
     def split: fn[self: *Self, pattern: *u8[]] -> Self.Split {
         def result: new Self.Split; 

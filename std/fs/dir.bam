@@ -1,0 +1,7 @@
+def Dir: class {
+    def fd: i32;
+
+    def cwd: fn[] -> Self {
+        return $[i32(0 - 100)];
+    };
+};

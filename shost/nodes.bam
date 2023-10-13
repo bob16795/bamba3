@@ -1,0 +1,63 @@
+def std: import "std";
+
+def Scanner: import "scanner.bam".Scanner;
+def Error: import "error.bam".Error;
+def Token: Scanner.Token;
+
+def printf: extern fn[] -> Void;
+
+def DefinitionNode: class {
+    def PrsResult: std.Types.Result(Self, Error);
+    def parse: fn[scn: *Scanner] -> PrsResult {
+        def start: &scn.getCheckpoint();
+        def forced: (&scn.matchNext(u8(Token.Kind.Force))).is_some();
+
+        if ((&scn.matchNext(u8(Token.Kind.Def))).is_none()) {
+            scn.setCheckpoint(start);
+            return PrsResult.err(Error.TodoError("def"));
+        }
+
+        def name: &scn.matchNext(u8(Token.Kind.Identifier));
+        if (name.is_none()) {
+            scn.setCheckpoint(start);
+            return PrsResult.err(Error.TodoError("ident"));
+        }
+        
+        if ((&scn.matchNext(u8(Token.Kind.Colon))).is_none()) {
+            scn.setCheckpoint(start);
+            return PrsResult.err(Error.TodoError("colon"));
+        }
+
+        printf("%u\n", forced);
+
+        return PrsResult.err(Error.TodoError("parse defs"));
+    };
+};
+
+def FileNode: class {
+    def defs: prop std.Types.ArrayList(DefinitionNode);
+
+    def PrsResult: std.Types.Result(Self, Error);
+    def parse: fn[scn: *Scanner] -> PrsResult {
+        def result: new Self = null;
+        result.defs.init();
+
+        while (Bool(true)) {
+            def parsed: &DefinitionNode.parse(scn);
+            if (*parsed.isErr) {
+                return PrsResult.err(*parsed.errv);
+            }
+            def parsed: parsed.okv;
+        }
+
+        return *result;
+    };
+    
+    def print: fn[self: *Self] -> Void {
+        std.Types.printf("File with %d nodes\n", self.defs.len());
+
+        def i: new usize = usize(0);
+
+        return;
+    };
+};

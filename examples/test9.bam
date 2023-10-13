@@ -1,14 +1,19 @@
-def std: import "std/std.bam";
+def std: import "std";
 
 def String: std.Types.String;
 
 def StringHash: std.Algorithm.Hash.getHash(String);
 def StringList: comptime {
-    return std.Types.SinglyLinkedList(String);
+    return std.Types.SinglyLinkedList(i32);
+};
+def StringAl: comptime {
+    return std.Types.ArrayList(String);
 };
 def StringHashMap: std.Types.HashMap(String, i32);
 
 def printf: std.Types.printf;
+
+def StringSet: std.Types.HashSet(String);
 
 force def main: fn[] -> i32 {
     def tmp: new String = String.from("hello");
@@ -35,6 +40,25 @@ force def main: fn[] -> i32 {
 
     printf("hashMap = ");
     hashMap.print();
+
+    def newList: new StringAl;
+    newList.init();
+
+    newList.append(String.from("lol"));
+    newList.append(String.from("a"));
+    newList.append(String.from("b"));
+
+    def i: new usize = usize(0);
+
+    while (*i < newList.len()) {
+        printf("%d: ", *i);
+
+        newList[*i].println();
+
+        i = *i + usize(1);
+    }
+
+    def set: new StringSet = StringSet.init();
 
     return i32(0);
 };

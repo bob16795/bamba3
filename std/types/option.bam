@@ -11,7 +11,7 @@ def Option: fn[T] -> Class {
             return *result;
         };
 
-        def some: fn[base: *BASE_TYPE] -> Self {
+        def some: fn[base: BASE_TYPE] -> Self {
             def result: new Self;
             result.val = base;
             result.has = Bool(true);
@@ -20,11 +20,11 @@ def Option: fn[T] -> Class {
         };
     
         def is_none: fn[self: *Self] -> Bool {
-            return *self.has == Bool(false);
+            return !*self.has;
         };
         
         def is_some: fn[self: *Self] -> Bool {
-            return *self.has == Bool(true);
+            return *self.has;
         };
     };
 };

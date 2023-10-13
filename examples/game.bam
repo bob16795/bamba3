@@ -1,6 +1,6 @@
-def std: import "std/std.bam";
-def sdl: import "libs/sdl.bam";
-def ecs: import "libs/ecs.bam";
+def std: import "std";
+def sdl: import "../libs/sdl.bam";
+def ecs: import "../libs/ecs.bam";
 
 def WINDOW_NAME: "GAME";
 

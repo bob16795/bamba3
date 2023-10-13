@@ -4,3 +4,4 @@ a.out
 ir
 tmp
 neovide_backtraces.log
+vgcore.*

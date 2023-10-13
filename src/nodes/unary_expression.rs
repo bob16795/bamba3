@@ -5,6 +5,7 @@ use crate::position::FileRange;
 use crate::scanner;
 use crate::visitable::*;
 use inkwell::types::*;
+use inkwell::values::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -235,10 +236,78 @@ impl<'a> Visitable<'a> for UnaryExpression {
                     }
                 }
             }
-            UnaryExpressionChild::Ref(_un) => Err(Error::BambaError {
-                data: ErrorData::TodoError("emit ref expression".to_string()),
-                pos: self.pos.clone(),
-            }),
+            UnaryExpressionChild::Ref(un) => {
+                let child = &un.emit(ctx.clone())?;
+
+                match child {
+                    Some(val) => match val {
+                        Value::Value { val, kind, .. } => {
+                            let p: Value = kind.clone().try_into()?;
+                            let load = {
+                                let b = ctx.borrow();
+
+                                let llvm_kind: BasicTypeEnum =
+                                    match kind.borrow_mut().get_type()?.as_ref() {
+                                        AnyTypeEnum::ArrayType(a) => a.clone().into(),
+                                        AnyTypeEnum::FloatType(a) => a.clone().into(),
+                                        AnyTypeEnum::IntType(a) => a.clone().into(),
+                                        AnyTypeEnum::PointerType(a) => a.clone().into(),
+                                        AnyTypeEnum::StructType(a) => a.clone().into(),
+                                        _ => {
+                                            return Err(Error::BambaError {
+                                                data: ErrorData::DerefValueError {
+                                                    kind: kind.clone().try_into()?,
+                                                },
+                                                pos: self.pos.clone(),
+                                            });
+                                        }
+                                    };
+
+                                let a = b.builder.build_alloca(llvm_kind, "ref").unwrap();
+
+                                b.builder.build_store(a, val.as_ref().clone()).unwrap();
+
+                                a
+                            };
+
+                            Ok(Some(Value::Value {
+                                val: Rc::new(load.into()),
+                                kind: Rc::new(RefCell::new(Node {
+                                    pos: self.pos.clone(),
+                                    ctx: ctx.clone(),
+                                    value: NodeV::Visited(Value::PointerType(kind.clone())),
+                                })),
+                                dropable: false,
+                            }))
+                        }
+                        Value::VoidType
+                        | Value::IntType { size: _, signed: _ }
+                        | Value::Class {
+                            children: _,
+                            kind: _,
+                            name: _,
+                        }
+                        | Value::PointerType(_)
+                        | Value::ArrayType { size: _, child: _ } => {
+                            Ok(Some(Value::PointerType(Rc::new(RefCell::new(Node {
+                                pos: self.pos.clone(),
+                                ctx: ctx.clone(),
+                                value: NodeV::Visited(val.clone()),
+                            })))))
+                        }
+                        v => Err(Error::BambaError {
+                            data: ErrorData::PointerTypeError { kind: v.clone() },
+                            pos: self.pos.clone(),
+                        }),
+                    },
+                    None => {
+                        return Err(Error::BambaError {
+                            data: ErrorData::TodoError("emit ref expression".to_string()),
+                            pos: self.pos.clone(),
+                        })
+                    }
+                }
+            }
             UnaryExpressionChild::Deref(un) => {
                 let child = &un.emit(ctx.clone())?;
 

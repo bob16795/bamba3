@@ -1,0 +1,2 @@
+def Dir: import "fs/dir.bam".Dir;
+def File: import "fs/file.bam".File;

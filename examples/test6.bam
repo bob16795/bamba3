@@ -1,4 +1,4 @@
-def std: import "std/std.bam";
+def std: import "std";
 def String: std.Types.String;
 
 force def main: fn[] -> i32 {

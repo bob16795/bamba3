@@ -1,1 +1,1 @@
-def entry: import "std/core/entry.bam".entry;
+def entry: import "core/entry.bam".entry;

@@ -1,4 +1,4 @@
-def std: import "std/std.bam";
+def std: import "std";
 
 def BoxT: std.Types.Box(i32);
 

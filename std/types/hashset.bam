@@ -1,0 +1,13 @@
+def HashMap: import "hashmap.bam".HashMap;
+
+def HashSet: fn[Data] -> Class {
+    return class {
+        def data: prop HashMap(Data, u0);
+
+        def init: fn[] -> Self {
+            def result: new Self = null;
+
+            return *result;
+        };
+    };
+};

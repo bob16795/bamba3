@@ -1,7 +1,5 @@
 use crate::position::FileRange;
 use crate::visitable::Value;
-use std::cell::BorrowError;
-use std::cell::BorrowMutError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -67,6 +65,9 @@ pub enum ErrorData<'a> {
 
     #[error("{0} not yet implemented")]
     TodoError(String),
+
+    #[error("The file {0} dosent exist")]
+    FileError(String),
 }
 
 #[derive(Error, Debug)]
@@ -76,7 +77,7 @@ pub enum Error<'a> {
     #[error(transparent)]
     Other(#[from] inkwell::builder::BuilderError),
     #[error(transparent)]
-    BorrowMut(#[from] BorrowMutError),
+    BorrowMut(#[from] std::cell::BorrowMutError),
     #[error(transparent)]
-    Borrow(#[from] BorrowError),
+    Borrow(#[from] std::cell::BorrowError),
 }

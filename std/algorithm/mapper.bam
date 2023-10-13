@@ -1,0 +1,21 @@
+def ArrayList: import "std".Types.ArrayList;
+
+def realloc: import "std".Types.realloc;
+def free: import "std".Types.free;
+
+def Map: fn[T] -> (fn[] -> Types.ArrayList(*Void)) {
+    return fn[base: *T] -> SliceT {
+        def result: new SliceT;
+        result.init();
+
+        def sp: new T.Item;
+
+        while (base.hasNext()) {
+            sp = base.next();
+
+            result.append(*sp);
+        }
+
+        return *result;
+    }; 
+};

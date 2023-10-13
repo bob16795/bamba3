@@ -7,6 +7,7 @@ use crate::position::{default_pos, FileRange};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use inkwell::basic_block::*;
@@ -35,11 +36,11 @@ pub struct NodeContext<'ctx> {
     pub module: Rc<Module<'ctx>>,
     pub builder: Rc<Builder<'ctx>>,
     pub func: Option<FunctionValue<'ctx>>,
-    pub files: RefCell<HashMap<String, Rc<RefCell<Node<'ctx>>>>>,
+    pub files: Rc<RefCell<HashMap<PathBuf, Rc<RefCell<Node<'ctx>>>>>>,
 
     pub break_pos: Option<BasicBlock<'ctx>>,
 
-    pub externs: RefCell<HashMap<String, FunctionValue<'ctx>>>,
+    pub externs: Rc<RefCell<HashMap<String, FunctionValue<'ctx>>>>,
 
     pub returned: Option<Rc<RefCell<bool>>>,
 }
@@ -89,6 +90,8 @@ pub enum BuiltinFunc {
     AddDef,
     GetProp,
     SetName,
+    HasDef,
+
     Print,
     Error,
 }
@@ -2003,6 +2006,13 @@ pub fn builtin_type<'a>(
             return Some(Rc::new(RefCell::new(Node {
                 pos: pos.clone(),
                 value: NodeV::Visited(Value::BuiltinFunc(BuiltinFunc::SetName)),
+                ctx,
+            })));
+        }
+        "@HAS_DEF" => {
+            return Some(Rc::new(RefCell::new(Node {
+                pos: pos.clone(),
+                value: NodeV::Visited(Value::BuiltinFunc(BuiltinFunc::HasDef)),
                 ctx,
             })));
         }

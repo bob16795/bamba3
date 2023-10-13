@@ -1,11 +1,23 @@
-def LinkedList: import "std/types/linkedlists.bam".SinglyLinkedList;
-def Hash: import "std/algorithm/hash.bam".Hash;
+def LinkedList: import "linkedlists.bam".SinglyLinkedList;
+def Hash: import "std".Algorithm.Hash;
 
 def HashMap: fn[K, V] -> Class {
     return class {
         def Entry: class {
             def key: prop K;
             def value: prop V;
+
+            def `drop`: fn[self: *Self] -> Void {
+                if (@HAS_DEF(K, "drop")) {
+                    self.key.`drop`();
+                }
+
+                if (@HAS_DEF(V, "drop")) {
+                    self.value.`drop`();
+                }
+
+                return;
+            };
         };
         
         def hashFn: Hash.getHash(K);
@@ -14,7 +26,9 @@ def HashMap: fn[K, V] -> Class {
         def entrys: prop EntryElem[256];
 
         def put: fn[self: *Self, key: K, value: V] -> Void {
-            def entryVal: Entry($[key, value]);
+            def k: (&key).clone();
+
+            def entryVal: Entry($[k, value]);
 
             def idx: u8(hashFn(key) % u32(128));
 

@@ -9,6 +9,10 @@ def SinglyLinkedList: fn[T] -> Class {
                     return;
 
                 def oldNext: *self.next;
+                
+                if (@HAS_DEF(T, "drop")) {
+                    (*Self)(*self.next).data.`drop`();
+                }
 
                 self.next = *(*Self)(*self.next).next;
 
@@ -55,6 +59,10 @@ def SinglyLinkedList: fn[T] -> Class {
 
             while (*(*self.head).next != (*Void)(null)) {
                 (*self.head).dropNext();
+            }
+
+            if (@HAS_DEF(T, "drop")) {
+                (*self.head).data.`drop`();
             }
 
             free(*self.head);

@@ -59,8 +59,8 @@ fn main() -> Result<(), String> {
                 func: None,
                 self_value: None,
 
-                files: RefCell::new(files),
-                externs: RefCell::new(externs),
+                files: Rc::new(RefCell::new(files)),
+                externs: Rc::new(RefCell::new(externs)),
                 break_pos: None,
                 returned: None,
             };

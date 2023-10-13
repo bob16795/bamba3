@@ -1,0 +1,29 @@
+def printf: extern fn[] -> Void;
+
+def Error: class {
+    def Id: class {
+        def Todo: u8(0);
+    };
+
+    def id: prop u8;
+    def data: prop (*u8[])[3];
+
+    def TodoError: fn[name: *u8[]] -> Self {
+        def result: new Self;
+
+        result.id = Id.Todo;
+        result.data[usize(0)] = name;
+
+        return *result;
+    };
+    
+    def print: fn[self: *Self] -> Void {
+        if (*self.id == Id.Todo) {
+            printf("Todo error %s\n", *self.data[usize(0)]);
+        } else {
+            printf("Invalid Error\n");
+        }
+
+        return;  
+    };
+};

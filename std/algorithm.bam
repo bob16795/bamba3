@@ -1,2 +1,2 @@
-def Hash: import "std/algorithm/hash.bam".Hash;
-def Collect: import "std/algorithm/collect.bam".Collect;
+def Hash: import "algorithm/hash.bam".Hash;
+def Collect: import "algorithm/collect.bam".Collect;

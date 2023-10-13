@@ -33,6 +33,10 @@ def Slice: fn[T] -> Class {
         def `[]`: fn[self: *Self, idx: usize] -> *T {
             return (*self.ptr)[idx];
         };
+
+        def last: fn[self: *Self] -> *T {
+            return (*self.ptr)[*self.len - usize(1)];
+        };
     };
 };
 

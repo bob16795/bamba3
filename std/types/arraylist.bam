@@ -1,4 +1,4 @@
-def Hash: import "std/algorithm/hash.bam".Hash;
+def Hash: import "std".Algorithm.Hash;
 
 def ArrayList: fn[T] -> Class {
     return class {
@@ -82,6 +82,18 @@ def ArrayList: fn[T] -> Class {
             return *result;
         };
         
+        def ensureLen: fn[self: *Self, len: usize] -> Void {
+            if (*self.capacity < len) {
+                self.capacity = len;
+
+                self.items.ptr = realloc(*self.items.ptr, Self.itemSize * *self.capacity);
+            }
+                
+            self.items.len = len;
+
+            return;
+        };
+        
         def len: fn[self: *Self] -> usize {
             return *self.items.len;
         };
@@ -91,6 +103,16 @@ def ArrayList: fn[T] -> Class {
         };
 
         def `drop`: fn[self: *Self] -> Void {
+            if (@HAS_DEF(T, "drop")) {
+                def i: new usize = usize(0);
+
+                while (*i < self.len()) { 
+                    self[*i].`drop`();
+
+                    i = *i + usize(1);
+                }
+            }
+            
             free(*self.items.ptr);
 
             return;

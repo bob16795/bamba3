@@ -1,0 +1,29 @@
+def std: import "std";
+
+def Position: class {
+    def file: prop *std.Types.String;
+    def line: prop usize;
+    def col: prop usize;
+    def pos: prop usize;
+    
+    def to: fn[self: *Self, other: *Self] -> FileRange {
+        return FileRange($[*self, *other]);
+    };
+
+    def advance: fn[self: *Self, ch: u8] -> Void {
+        self.pos = *self.pos + usize(1);
+        if (ch == u8(10)) {
+            self.line = *self.line + usize(1);
+            self.col = usize(0);
+        }
+        
+        self.col = *self.col + usize(1);
+        
+        return;
+    };
+};
+
+def FileRange: class {
+    def start: prop Position;
+    def end: prop Position;
+};
